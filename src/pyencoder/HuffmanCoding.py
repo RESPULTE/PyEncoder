@@ -1,19 +1,17 @@
-from typing import Dict, Type, TypeVar, Union, List, Tuple, NewType, Deque, BinaryIO
+from typing import Dict, Union, List, Tuple, Deque, BinaryIO
 from collections import Counter, deque
 from dataclasses import dataclass
 from bisect import insort
 
-ValidDataType = TypeVar('ValidDataType', str, List[int], List[float])
-ValidDataset = TypeVar('ValidDataset', str, list, tuple)
-BitCode = NewType("BitCode", str)
-
-SUPPORTED_DTYPE: Dict[bytes, Type] = {
-    b'0': str,
-    b'1': int,
-    b'2': float
-}
-
-DIV = b'\$'
+from pyencoder._type_hints import (
+    ValidDataType, 
+    BitCode, 
+    SUPPORTED_DTYPE, 
+    DIV, 
+    _check_datatype,
+    _get_dtype_header,
+    DecompressionError
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,22 +21,9 @@ class Huffman_Node:
     right: Union['Huffman_Node', str]
 
 
-class NotEncodedError(Exception):
-    pass
 
-
-class DecompressionError(Exception):
-    pass
-
-
-def compress(dataset: Union[str, list, tuple], dtype: Type) -> Tuple[str, BitCode]:
-    global SUPPORTED_DTYPE
-
-    if not isinstance(dataset, (str, list, tuple)) or not bool(dataset):
-        raise TypeError("dataset must be a non-empty list/str/tuple")
-
-    if dtype not in SUPPORTED_DTYPE.values():
-        raise TypeError(f" datatype not supported '{dtype}'")
+def encode(dataset: Union[str, list, tuple], dtype: ValidDataType) -> Tuple[str, BitCode]:
+    _check_datatype(dataset, dtype)
 
     huffman_tree = _build_tree_from_dataset(Counter(dataset).most_common())
     huffman_string = _generate_bitcode(huffman_tree)
@@ -49,7 +34,7 @@ def compress(dataset: Union[str, list, tuple], dtype: Type) -> Tuple[str, BitCod
     return huffman_string, encoded_data
 
 
-def decompress(huffman_string: str, encoded_data: BitCode, dtype: ValidDataType) -> ValidDataType:
+def decode(huffman_string: str, encoded_data: BitCode, dtype: ValidDataType) -> ValidDataType:
     try:
         huffman_tree = _build_tree_from_bitcode(huffman_string, dtype)
         catalogue = _generate_catalogue(huffman_tree)
@@ -73,35 +58,31 @@ def decompress(huffman_string: str, encoded_data: BitCode, dtype: ValidDataType)
         raise DecompressionError(f"Unknown error has occured -> {e}")
 
     else:
-        return "".join(decoded_data) if dtype is str else decoded_data
+        return "".join(decoded_data) if dtype == str else decoded_data
 
 
 def dump(dataset: Union[str, list, tuple], file: BinaryIO, dtype: ValidDataType) -> None:
-    global DIV
-    huffman_string, encoded_data = compress(dataset, dtype)
-
-    if not file.name.endswith('.txt'):
-        dtype = list(SUPPORTED_DTYPE.keys())[list(SUPPORTED_DTYPE.values()).index(dtype)]
-        header = huffman_string.encode('utf-8')
-        datapack = encoded_data.encode('utf-8')
+    huffman_string, encoded_data = encode(dataset, dtype)
+    
+    dtype = _get_dtype_header(dtype)
+    header = huffman_string.encode('utf-8')
+    datapack = encoded_data.encode('utf-8')
 
     file.write(dtype + DIV + header + DIV + datapack)
 
 
 def load(file: BinaryIO) -> None:
-    global SUPPORTED_DTYPE, DIV
     try:
         dtype, raw_header, raw_datapack = file.read().split(DIV)
     except:
-        raise ValueError(
+        raise DecompressionError(
             "Could not read the given file, make sure it has been encoded with the module"
         )
 
-    if not file.name.endswith('.txt'):
-        encoded_data = raw_datapack.decode('utf-8')
-        huffman_string = raw_header.decode('utf-8')
+    encoded_data = raw_datapack.decode('utf-8')
+    huffman_string = raw_header.decode('utf-8')
 
-    return decompress(huffman_string, encoded_data, SUPPORTED_DTYPE[dtype])
+    return decode(huffman_string, encoded_data, SUPPORTED_DTYPE[dtype])
 
 
 def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
