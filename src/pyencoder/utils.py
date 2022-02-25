@@ -2,7 +2,7 @@ from typing import Dict, Callable
 
 from pyencoder._type_hints import ValidDataset
 
-
+# fckin inefficient
 def _diagonal_zigzag_traversal(dataset: ValidDataset):
     row, col = len(dataset), len(dataset[0])
     datapacks = [[] for i in range(row + col - 1)]
@@ -17,6 +17,10 @@ def _diagonal_zigzag_traversal(dataset: ValidDataset):
             datapacks[index_sum].append(data)
 
     return [data for packet in datapacks for data in packet]
+
+
+def _inverse_diagonal_zigzag_traversal(dataset: ValidDataset):
+    pass
 
 
 def _vertical_zigzag_traversal(dataset: ValidDataset):
@@ -35,6 +39,10 @@ def _vertical_zigzag_traversal(dataset: ValidDataset):
     return datapacks
 
 
+def _inverse_vertical_zigzag_traversal(dataset: ValidDataset):
+    pass
+
+
 def _horizontal_zigzag_traversal(dataset: ValidDataset):
     row, col = len(dataset), len(dataset[0])
     datapacks = []
@@ -50,8 +58,20 @@ def _horizontal_zigzag_traversal(dataset: ValidDataset):
 
     return datapacks
 
+
+def _inverse_horizontal_zigzag_traversal(dataset: ValidDataset):
+    pass
+
+
 SUPPORTED_RUNTYPE: Dict[str, Callable] = {
-    "v-zigzag": _vertical_zigzag_traversal,
-    "h-zigzag": _horizontal_zigzag_traversal,
-    "d-zigzag": _diagonal_zigzag_traversal,
+    "vz": _vertical_zigzag_traversal,
+    "hz": _horizontal_zigzag_traversal,
+    "dz": _diagonal_zigzag_traversal,
 }
+
+
+def triangular(n):
+    return n * (n + 1) // 2
+
+
+print(_inverse_diagonal_zigzag_traversal(_diagonal_zigzag_traversal([[1, 2, 3], [4, 5, 6], [7, 8, 9]])))
