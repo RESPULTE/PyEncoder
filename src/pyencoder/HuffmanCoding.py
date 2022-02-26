@@ -9,12 +9,11 @@ from bitarray.util import ba2int, int2ba
 from pyencoder._type_hints import (
     ValidDataType,
     BitCode,
-    SUPPORTED_DTYPE,
-    DIV,
-    _check_datatype,
-    _get_dtype_byte_header,
     DecompressionError,
 )
+
+DEFAULT_DELIMITER = 69420
+DEFAULT_MARKER = 42069
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +23,7 @@ class Huffman_Node:
     right: Union["Huffman_Node", str]
 
 
-def encode(dataset: Union[str, list, tuple], dtype: ValidDataType) -> Tuple[str, BitCode]:
+def encode(dataset: Union[str, list, tuple], dtype: ValidDataType) -> Tuple[str, str]:
     # encoding the data
     huffman_tree = _build_tree_from_dataset(Counter(dataset).most_common())
     catalogue = {v: k for k, v in _generate_catalogue(huffman_tree).items()}
@@ -105,79 +104,57 @@ def decode(huffman_string: str, encoded_data: bitarray, data_size: int, dtype: V
         return "".join(decoded_data) if dtype == str else decoded_data
 
 
-def dump(
-    dataset: Union[str, list, tuple], dtype: ValidDataType, file: BinaryIO, *, delimiter: str = "", marker: str = ""
-) -> None:
+def dump(dataset: Union[str, list, tuple], file: BinaryIO, *, delimiter: int = None, marker: int = None) -> None:
     if delimiter == marker:
         raise ValueError("delimiter and huff marker should not be the same")
 
-    if delimiter:
-        if isinstance(delimiter, str):
-            delimiter = "".join(f"{ord(i):b}" for i in delimiter)
-        else:
-            delimiter = format(delimiter, "04b")
-    else:
-        delimiter = "DEFAULT_DELIMITER"
+    dtype = str if not isinstance(dataset, list) else int
+    if dtype == int:
+        if not all(isinstance(data, int) for data in dataset):
+            raise ValueError("dataset must be a list of 'int' or a 'str'")
 
-    if marker:
-        if isinstance(marker, str):
-            marker = "".join(f"{ord(i):b}" for i in marker)
-        else:
-            marker = format(marker, "04b")
-
-    else:
-        marker = "DEFAULT_MARKER"
+    delimiter = format(delimiter if delimiter else DEFAULT_DELIMITER, "b")
+    marker = format(marker if marker else DEFAULT_MARKER, "b")
 
     header, encoded_data = encode(dataset, dtype)
 
     # the actual data
     huffman_data = header + delimiter + encoded_data
 
-    # the length of the data
-    huffman_length = format(len(huffman_data), "032b")
-    datapack = bitarray(marker + huffman_length + huffman_data)
+    dtype = "0" if dtype == str else "1"
+
+    # the size of the data
+    huffman_size = format(len(huffman_data), "032b")
+
+    datapack = bitarray(marker + dtype + huffman_size + huffman_data)
     datapack.tofile(file)
 
 
-def load(file: BinaryIO, *, delimiter: str = "", marker: str = "") -> ValidDataType:
+def load(file: BinaryIO, *, delimiter: int = "", marker: int = "") -> ValidDataType:
     if delimiter == marker:
         raise ValueError("delimiter and huff marker should not be the same")
 
-    if delimiter:
-        if isinstance(delimiter, str):
-            delimiter = delimiter.encode("utf-8")
-        else:
-            delimiter = int2ba(delimiter)
-    else:
-        delimiter = "DEFAULT_DELIMITER"
+    delimiter = int2ba(delimiter if delimiter else DEFAULT_DELIMITER)
+    marker = int2ba(marker if marker else DEFAULT_MARKER)
 
-    if marker:
-        if isinstance(marker, str):
-            marker = marker.encode("utf-8")
-        else:
-            marker = int2ba(marker)
-
-    else:
-        marker = "DEFAULT_MARKER"
     try:
         encoded_data = bitarray()
         encoded_data.frombytes(file.read())
 
-        starting_index = encoded_data.index(marker) + len(marker)
+        huff_block_index = encoded_data.index(marker) + len(marker)
+        encoded_dtype = str if encoded_data[huff_block_index] == 0 else int
+
+        starting_index = huff_block_index + 1
         huffman_size = ba2int(encoded_data[starting_index : starting_index + 32])
         huffman_data = encoded_data[starting_index + 32 : starting_index + 32 + huffman_size]
 
-        delimiter_index = huffman_data.index(delimiter)
-        huffman_stringdata, encoded_data = (
-            huffman_data[:delimiter_index],
-            huffman_data[delimiter_index + len(delimiter) :],
-        )
+        huffman_stringdata, encoded_data = __partition_bitstring(huffman_data, delimiter)
         huffman_datasize, huffman_string = ba2int(huffman_stringdata[:32]), huffman_stringdata[32:]
 
     except:
         raise DecompressionError("Could not read the given file, make sure it has been encoded with the module")
     else:
-        return decode(huffman_string, encoded_data, huffman_datasize, str)
+        return decode(huffman_string, encoded_data, huffman_datasize, encoded_dtype)
 
 
 def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
@@ -197,8 +174,6 @@ def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]])
 
 def _build_tree_from_bitcode(huffmanString: bitarray, data_size: int, dtype: ValidDataType) -> Huffman_Node:
     def traversal_builder(to_process: bitarray):
-        if not to_process:
-            return None, None
         next_bit = to_process.pop(0)
         if next_bit == 0:
             data = ba2int(to_process[:data_size])
@@ -222,3 +197,15 @@ def _generate_catalogue(huffnode: Huffman_Node, tag: BitCode = "") -> Dict[BitCo
     catalogue.update(_generate_catalogue(huffnode.right, tag + "1"))
 
     return catalogue
+
+
+def __partition_bitstring(bitstring: bitarray, sep: bitarray) -> Tuple[bitarray, bitarray]:
+    sep_index = bitstring.index(sep)
+    return bitstring[:sep_index], bitstring[sep_index + len(sep) :]
+
+
+with open("file", "wb") as f:
+    dump([1, 2, "a3"], f, delimiter=20202, marker=16901)
+
+with open("file", "rb") as f:
+    print(load(f, delimiter=20202, marker=16901))
