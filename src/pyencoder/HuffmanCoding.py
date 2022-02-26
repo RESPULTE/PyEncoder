@@ -135,7 +135,6 @@ def dump(
 
     # the length of the data
     huffman_length = format(len(huffman_data), "032b")
-
     datapack = bitarray(marker + huffman_length + huffman_data)
     datapack.tofile(file)
 
@@ -163,22 +162,22 @@ def load(file: BinaryIO, *, delimiter: str = "", marker: str = "") -> ValidDataT
     try:
         encoded_data = bitarray()
         encoded_data.frombytes(file.read())
+
         starting_index = encoded_data.index(marker) + len(marker)
         huffman_size = ba2int(encoded_data[starting_index : starting_index + 32])
-        huffman_data = encoded_data[starting_index + 32 : starting_index + huffman_size + 32]
+        huffman_data = encoded_data[starting_index + 32 : starting_index + 32 + huffman_size]
 
         delimiter_index = huffman_data.index(delimiter)
         huffman_stringdata, encoded_data = (
             huffman_data[:delimiter_index],
             huffman_data[delimiter_index + len(delimiter) :],
         )
-
         huffman_datasize, huffman_string = ba2int(huffman_stringdata[:32]), huffman_stringdata[32:]
 
     except:
         raise DecompressionError("Could not read the given file, make sure it has been encoded with the module")
     else:
-        return decode(huffman_string, encoded_data, huffman_datasize, int)
+        return decode(huffman_string, encoded_data, huffman_datasize, str)
 
 
 def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
@@ -196,18 +195,22 @@ def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]])
     return quantised_dataset[0][0]
 
 
-def _build_tree_from_bitcode(huffmanString: BitCode, data_size: int, dtype: ValidDataType) -> Huffman_Node:
-    def traversal_builder(next_bit: str, to_process: bitarray):
+def _build_tree_from_bitcode(huffmanString: bitarray, data_size: int, dtype: ValidDataType) -> Huffman_Node:
+    def traversal_builder(to_process: bitarray):
+        if not to_process:
+            return None, None
+        next_bit = to_process.pop(0)
         if next_bit == 0:
-            return dtype(ba2int(to_process[:data_size])), to_process[data_size:]
+            data = ba2int(to_process[:data_size])
+            if dtype == str:
+                data = chr(data)
+            return data, to_process[data_size:]
 
-        if to_process:
-            left_child, to_process = traversal_builder(to_process.pop(0), to_process)
-        if to_process:
-            right_child, to_process = traversal_builder(to_process.pop(0), to_process)
+        left_child, to_process = traversal_builder(to_process)
+        right_child, to_process = traversal_builder(to_process)
         return Huffman_Node(left=left_child, right=right_child), to_process
 
-    return traversal_builder(huffmanString.pop(0), huffmanString)[0]
+    return traversal_builder(huffmanString)[0]
 
 
 def _generate_catalogue(huffnode: Huffman_Node, tag: BitCode = "") -> Dict[BitCode, ValidDataType]:
@@ -219,10 +222,3 @@ def _generate_catalogue(huffnode: Huffman_Node, tag: BitCode = "") -> Dict[BitCo
     catalogue.update(_generate_catalogue(huffnode.right, tag + "1"))
 
     return catalogue
-
-
-with open("file.txt", "wb") as f:
-    dump([1, 2, 3, 4, 4, 4, 4, 4, 4], int, f, delimiter=1219, marker=11)
-
-with open("file.txt", "rb") as f:
-    print(load(f, delimiter=1219, marker=11))
