@@ -3,27 +3,37 @@ from typing import Dict, Callable
 from pyencoder._type_hints import ValidDataset
 
 # fckin inefficient
-def _diagonal_zigzag_traversal(dataset: ValidDataset):
-    row, col = len(dataset), len(dataset[0])
-    datapacks = [[] for i in range(row + col - 1)]
+def dzigzag(dataset: ValidDataset):
+    index_list = generate_dzigzag_index(len(dataset), len(dataset[0]))
+    return [dataset[i][j] for (i, j) in index_list]
+
+
+def idzigzag(dataset: ValidDataset):
+    col = row = int(len(dataset) ** 0.5)
+
+    matrix_2D = [[None for _ in range(col)] for _ in range(row)]
+
+    for index, (i, j) in enumerate(generate_dzigzag_index(row, col)):
+        matrix_2D[i][j] = dataset[index]
+
+    return matrix_2D
+
+
+def generate_dzigzag_index(row, col):
+    index_list = [[] for _ in range(row + col - 1)]
 
     for i in range(row):
         for j in range(col):
             index_sum = i + j
-            data = dataset[i][j]
             if index_sum % 2 == 0:
-                datapacks[index_sum].insert(0, data)
+                index_list[index_sum].insert(0, (i, j))
                 continue
-            datapacks[index_sum].append(data)
+            index_list[index_sum].append((i, j))
 
-    return [data for packet in datapacks for data in packet]
-
-
-def _inverse_diagonal_zigzag_traversal(dataset: ValidDataset):
-    pass
+    return [(i, j) for coor in index_list for (i, j) in coor]
 
 
-def _vertical_zigzag_traversal(dataset: ValidDataset):
+def vzigzag(dataset: ValidDataset):
     row, col = len(dataset), len(dataset[0])
     datapacks = []
 
@@ -43,7 +53,7 @@ def _inverse_vertical_zigzag_traversal(dataset: ValidDataset):
     pass
 
 
-def _horizontal_zigzag_traversal(dataset: ValidDataset):
+def hzigzag(dataset: ValidDataset):
     row, col = len(dataset), len(dataset[0])
     datapacks = []
 
@@ -61,17 +71,3 @@ def _horizontal_zigzag_traversal(dataset: ValidDataset):
 
 def _inverse_horizontal_zigzag_traversal(dataset: ValidDataset):
     pass
-
-
-SUPPORTED_RUNTYPE: Dict[str, Callable] = {
-    "vz": _vertical_zigzag_traversal,
-    "hz": _horizontal_zigzag_traversal,
-    "dz": _diagonal_zigzag_traversal,
-}
-
-
-def triangular(n):
-    return n * (n + 1) // 2
-
-
-print(_inverse_diagonal_zigzag_traversal(_diagonal_zigzag_traversal([[1, 2, 3], [4, 5, 6], [7, 8, 9]])))
