@@ -2,13 +2,11 @@ from typing import Optional, Union, BinaryIO, Dict, Callable
 
 from pyencoder._type_hints import (
     ValidDataType,
-    BitCode,
+    BinaryCode,
 )
 
-from pyencoder.utils import SUPPORTED_RUNTYPE
 
-
-def encode(dataset: Union[str, list, tuple], dtype: ValidDataType, runtype: Optional[str] = "") -> BitCode:
+def encode(dataset: Union[str, list, tuple], dtype: ValidDataType, runtype: Optional[str] = "") -> BinaryCode:
     dataset_size = len(dataset)
     encoded_data = ""
     curr_index = 0
@@ -28,11 +26,16 @@ def encode(dataset: Union[str, list, tuple], dtype: ValidDataType, runtype: Opti
     return f"{runtype}|{encoded_data}"
 
 
-def decode(encoded_data: BitCode, dtype: ValidDataType) -> ValidDataType:
+def decode(encoded_data: BinaryCode, dtype: ValidDataType) -> ValidDataType:
     runtype, _, encoded_data = encoded_data.partition("|")
     if runtype != "":
         pass
     encoded_data = encoded_data.split("|")[:-1]
-    decoded_data = [dtype(d) for index, data in enumerate(encoded_data) if index % 2 == 0 for d in [data] * int(encoded_data[index + 1])]
+    decoded_data = [
+        dtype(d)
+        for index, data in enumerate(encoded_data)
+        if index % 2 == 0
+        for d in [data] * int(encoded_data[index + 1])
+    ]
 
     return decoded_data if dtype != str else "".join(decoded_data)

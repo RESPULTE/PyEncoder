@@ -1,24 +1,22 @@
-from typing import Dict, Union, List, Tuple, BinaryIO, Callable
+from bisect import insort
 from collections import Counter
 from dataclasses import dataclass
-from bisect import insort
+from typing import BinaryIO, Dict, List, Tuple, Union
 
 from bitarray import bitarray
-from bitarray.util import ba2int, int2ba
+from bitarray.util import ba2int
 
-from pyencoder.utils import TO_BINARY_CONVERTER, FROM_BINARY_CONVERTER
+from pyencoder._type_hints import BinaryCode, DecompressionError, ValidDataType
 from pyencoder.config import (
-    DEFAULT_DELIMITER,
-    DEFAULT_HUFFMARKER,
-    DEFAULT_DTYPEMARKER_SIZE,
-    SUPPORTED_DTYPE_TO_BIN,
-    SUPPORTED_DTYPE_FROM_BIN,
+    _DTYPEMARKER_LEN,
+    _DATASIZEMARKER_LEN,
+    _DATA_BINARYSIZE_MARKER_LEN,
+    _SUPPORTED_DTYPE_FROM_BIN,
+    _SUPPORTED_DTYPE_TO_BIN,
+    DELIMITER,
+    HUFFMARKER,
 )
-from pyencoder._type_hints import (
-    ValidDataType,
-    BitCode,
-    DecompressionError,
-)
+from pyencoder.utils import frombin, tobin
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +38,7 @@ def encode(dataset: Union[str, list, tuple], dtype: ValidDataType) -> Tuple[str,
     return huffman_string, encoded_data
 
 
-def _encode_dataset(dataset: ValidDataType, catalogue: Dict[BitCode, ValidDataType]) -> BitCode:
+def _encode_dataset(dataset: ValidDataType, catalogue: Dict[BinaryCode, ValidDataType]) -> BinaryCode:
     if isinstance(dataset, str):
         dataset = list(dataset)
     return "".join([catalogue[data] for data in dataset])
@@ -51,8 +49,9 @@ def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType) ->
 
     def traverse_huffmantree(huffman_tree: Huffman_Node):
         if not isinstance(huffman_tree, Huffman_Node):
-            unique_datalist.append(huffman_tree)
-            return ["0", huffman_tree]
+            dtype_ensured_data = dtype(huffman_tree)
+            unique_datalist.append(dtype_ensured_data)
+            return ["0", dtype_ensured_data]
 
         huffmanString = ["1"]
         for node in [huffman_tree.left, huffman_tree.right]:
@@ -66,25 +65,30 @@ def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType) ->
     max_bitsize = 0
     for data in unique_datalist:
 
-        binData = TO_BINARY_CONVERTER[dtype](data, max_bitsize)
+        binData = tobin(data, bitlength=max_bitsize)
         bindata_and_binSize[data] = binData
         binSize = len(binData)
 
         if binSize > max_bitsize:
             max_bitsize = binSize
 
+    if dtype == int:
+        max_bitsize += 1
+
     for index, data in enumerate(huffman_list):
         if huffman_list[index - 1] == "0":
             huffman_list[index] = bindata_and_binSize[data].zfill(max_bitsize)
+            if dtype == int and data < 0:
+                huffman_list[index] = "1" + huffman_list[index][1:]
 
-    huffman_list.insert(0, format(max_bitsize, "08b"))
+    huffman_list.insert(0, format(max_bitsize, f"0{_DATA_BINARYSIZE_MARKER_LEN}b"))
 
     return "".join(huffman_list)
 
 
 def decode(huffman_string: str, encoded_data: str, data_size: int, dtype: ValidDataType) -> ValidDataType:
     try:
-        huffman_tree = _build_tree_from_bitcode(huffman_string, data_size, dtype)
+        huffman_tree = _build_tree_from_bitarray(huffman_string, data_size, dtype)
         catalogue = _generate_catalogue(huffman_tree)
 
         current_node = huffman_tree
@@ -115,54 +119,66 @@ def dump(dataset: Union[str, list, tuple], file: BinaryIO, *, delimiter: int = N
 
     if isinstance(dataset, str):
         dtype = str
+    elif all(isinstance(data, int) for data in dataset):
+        dtype = int
+    elif all(isinstance(data, (int, float)) for data in dataset):
+        dtype = float
     else:
-        if all(isinstance(data, int) for data in dataset):
-            dtype = int
-        else:
-            dtype = float
+        raise ValueError("inconsistent datatype in dataset")
 
-    delimiter = format(delimiter if delimiter else DEFAULT_DELIMITER, "b")
-    marker = format(marker if marker else DEFAULT_HUFFMARKER, "b")
+    delimiter = tobin(delimiter if delimiter else DELIMITER)
+    marker = tobin(marker if marker else HUFFMARKER)
 
     header, encoded_data = encode(dataset, dtype)
 
     # the actual data
     huffman_data = header + delimiter + encoded_data
 
-    dtype_marker = SUPPORTED_DTYPE_TO_BIN[dtype]
+    dtype_marker = _SUPPORTED_DTYPE_TO_BIN[dtype]
 
     # the size of the entire huffmancoding
-    huffmancoding_size = format(len(huffman_data), "032b")
+    huffmancoding_size = format(len(huffman_data), f"0{_DATASIZEMARKER_LEN}b")
 
     datapack = bitarray(marker + dtype_marker + huffmancoding_size + huffman_data)
 
     datapack.tofile(file)
 
 
-def load(file: BinaryIO, *, delimiter: int = None, marker: int = None) -> ValidDataType:
+def load(file: BinaryIO, *, delimiter: str = None, marker: str = None) -> ValidDataType:
     if delimiter or marker and delimiter == marker:
         raise ValueError("delimiter and huff marker should not be the same")
 
-    delimiter = int2ba(delimiter if delimiter else DEFAULT_DELIMITER)
-    marker = int2ba(marker if marker else DEFAULT_HUFFMARKER)
+    marker = tobin(marker if marker else HUFFMARKER)
+    delimiter = tobin(delimiter if delimiter else DELIMITER)
 
     try:
         encoded_data = bitarray()
         encoded_data.frombytes(file.read())
 
         _, encoded_data = partition_bitstring(encoded_data, marker)
-        encoded_dtype = SUPPORTED_DTYPE_FROM_BIN[encoded_data[:DEFAULT_DTYPEMARKER_SIZE].to01()]
 
-        data_starting_index = datasize_ending_index = 32 + DEFAULT_DTYPEMARKER_SIZE
-        datasize_starting_index = DEFAULT_DTYPEMARKER_SIZE
+        # get the data type of the encoded data
+        encoded_dtype = _SUPPORTED_DTYPE_FROM_BIN[encoded_data[:_DTYPEMARKER_LEN].to01()]
+
+        # get the index where the actual encoded data (including the header) starts
+        # get the starting and ending index of the datasize indicator
+        data_starting_index = datasize_ending_index = _DATASIZEMARKER_LEN + _DTYPEMARKER_LEN
+        datasize_starting_index = _DTYPEMARKER_LEN
 
         data_size = ba2int(encoded_data[datasize_starting_index:datasize_ending_index])
         data_ending_index = data_starting_index + data_size
 
+        # grab all the encoded data from the huffmanencoding and discard the rest
         huffman_data = encoded_data[data_starting_index:data_ending_index]
 
+        # seperate the header from the encode huffman data
         huffman_stringdata, encoded_data = partition_bitstring(huffman_data, delimiter)
-        huffman_datasize, huffman_string = ba2int(huffman_stringdata[:8]), huffman_stringdata[8:]
+
+        # seperate the header into the size of the data and the binary representation of huffman tree
+        huffman_datasize, huffman_string = (
+            ba2int(huffman_stringdata[:_DATA_BINARYSIZE_MARKER_LEN]),
+            huffman_stringdata[_DATA_BINARYSIZE_MARKER_LEN:],
+        )
 
     except:
         raise DecompressionError("Could not read the given file, make sure it has been encoded with the module")
@@ -171,7 +187,6 @@ def load(file: BinaryIO, *, delimiter: int = None, marker: int = None) -> ValidD
 
 
 def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
-
     while len(quantised_dataset) != 1:
         (data1, freq_1), (data2, freq_2) = quantised_dataset[:-3:-1]
 
@@ -185,13 +200,15 @@ def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]])
     return quantised_dataset[0][0]
 
 
-def _build_tree_from_bitcode(huffmanString: bitarray, data_size: int, dtype: ValidDataType) -> Huffman_Node:
-    binconverter = FROM_BINARY_CONVERTER[dtype]
-
+def _build_tree_from_bitarray(huffmanString: bitarray, data_size: int, dtype: ValidDataType) -> Huffman_Node:
     def traversal_builder(to_process: bitarray):
         next_bit = to_process.pop(0)
         if next_bit == 0:
-            data = binconverter(to_process[:data_size].to01())
+            bindata = to_process[:data_size].to01()
+            if dtype == int:
+                data = frombin(bindata, dtype, signed=True)
+            else:
+                data = frombin(bindata, dtype)
             return data, to_process[data_size:]
 
         left_child, to_process = traversal_builder(to_process)
@@ -201,7 +218,7 @@ def _build_tree_from_bitcode(huffmanString: bitarray, data_size: int, dtype: Val
     return traversal_builder(huffmanString)[0]
 
 
-def _generate_catalogue(huffnode: Huffman_Node, tag: BitCode = "") -> Dict[BitCode, ValidDataType]:
+def _generate_catalogue(huffnode: Huffman_Node, tag: BinaryCode = "") -> Dict[BinaryCode, ValidDataType]:
     if not isinstance(huffnode, Huffman_Node):
         return {tag: huffnode}
 
@@ -212,6 +229,6 @@ def _generate_catalogue(huffnode: Huffman_Node, tag: BitCode = "") -> Dict[BitCo
     return catalogue
 
 
-def partition_bitstring(bitstring: bitarray, sep: bitarray) -> Tuple[bitarray, bitarray]:
-    sep_index = bitstring.index(sep)
+def partition_bitstring(bitstring: bitarray, sep: BinaryCode) -> Tuple[bitarray, bitarray]:
+    sep_index = bitstring.index(bitarray(sep))
     return bitstring[:sep_index], bitstring[sep_index + len(sep) :]
