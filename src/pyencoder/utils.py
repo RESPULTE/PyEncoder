@@ -129,4 +129,4 @@ TO_BINARY_CONVERTER: Dict[Type, Callable] = {
     float: float2bin,
 }
 
-FROM_BINARY_CONVERTER: Dict[Type, Callable] = {str: bin2char, int: bin2int, float: float2bin}
+FROM_BINARY_CONVERTER: Dict[Type, Callable] = {str: bin2char, int: bin2int, float: bin2float}
