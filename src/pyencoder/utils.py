@@ -36,43 +36,63 @@ def generate_dzigzag_index(row, col):
 
 
 def vzigzag(dataset: ValidDataset):
-    row, col = len(dataset), len(dataset[0])
+    index_list = generate_vzigzag_index(len(dataset), len(dataset[0]))
+    return [dataset[i][j] for (i, j) in index_list]
+
+
+def ivzigzag(dataset: ValidDataset):
+    col = row = int(len(dataset) ** 0.5)
+
+    matrix_2D = [[None for _ in range(col)] for _ in range(row)]
+
+    for index, (i, j) in enumerate(generate_vzigzag_index(row, col)):
+        matrix_2D[i][j] = dataset[index]
+
+    return matrix_2D
+
+
+def generate_vzigzag_index(row, col):
     datapacks = []
 
     for j in range(col):
         insert_index = j * col
         for i in range(row):
-            data = dataset[i][j]
             if j % 2 == 0:
-                datapacks.append(data)
+                datapacks.append((i, j))
                 continue
-            datapacks.insert(insert_index, data)
+            datapacks.insert(insert_index, (i, j))
 
     return datapacks
 
 
-def _inverse_vertical_zigzag_traversal(dataset: ValidDataset):
-    pass
-
-
 def hzigzag(dataset: ValidDataset):
-    row, col = len(dataset), len(dataset[0])
+    index_list = generate_hzigzag_index(len(dataset), len(dataset[0]))
+    return [dataset[i][j] for (i, j) in index_list]
+
+
+def ihzigzag(dataset: ValidDataset):
+    col = row = int(len(dataset) ** 0.5)
+
+    matrix_2D = [[None for _ in range(col)] for _ in range(row)]
+
+    for index, (i, j) in enumerate(generate_hzigzag_index(row, col)):
+        matrix_2D[i][j] = dataset[index]
+
+    return matrix_2D
+
+
+def generate_hzigzag_index(row: int, col: int):
     datapacks = []
 
     for i in range(row):
         insert_index = i * row
         for j in range(col):
-            data = dataset[i][j]
             if i % 2 == 0:
-                datapacks.append(data)
+                datapacks.append((i, j))
                 continue
-            datapacks.insert(insert_index, data)
+            datapacks.insert(insert_index, (i, j))
 
     return datapacks
-
-
-def _inverse_horizontal_zigzag_traversal(dataset: ValidDataset):
-    pass
 
 
 def bin2float(b: str):
