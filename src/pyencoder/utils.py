@@ -1,8 +1,10 @@
-from typing import Dict, Callable
+from typing import Type, Dict, Callable
+import struct
 
 from pyencoder._type_hints import ValidDataset
+from pyencoder.config import BYTEORDER, STRING_ENCODING
 
-# fckin inefficient
+
 def dzigzag(dataset: ValidDataset):
     index_list = generate_dzigzag_index(len(dataset), len(dataset[0]))
     return [dataset[i][j] for (i, j) in index_list]
@@ -71,3 +73,40 @@ def hzigzag(dataset: ValidDataset):
 
 def _inverse_horizontal_zigzag_traversal(dataset: ValidDataset):
     pass
+
+
+def bin2float(b: str):
+    endian = ">" if BYTEORDER == "big" else "<"
+    h = int(b, 2).to_bytes(8, byteorder=BYTEORDER)
+    return struct.unpack(f"{endian}d", h)[0]
+
+
+def float2bin(f: float, bitlength: int):
+    endian = ">" if BYTEORDER == "big" else "<"
+    d = struct.unpack(f"{endian}Q", struct.pack(f"{endian}d", f))
+    return format(*d, f"0{bitlength}b")
+
+
+def char2bin(s: str, bitlength: int):
+    return format(ord(s), f"0{bitlength}b")
+
+
+def bin2char(b: str):
+    return chr(int(b, 2))
+
+
+def int2bin(i: int, bitlength: int):
+    return format(i, f"0{bitlength}b")
+
+
+def bin2int(b: str):
+    return int(b, 2)
+
+
+TO_BINARY_CONVERTER: Dict[Type, Callable] = {
+    str: char2bin,
+    int: int2bin,
+    float: float2bin,
+}
+
+FROM_BINARY_CONVERTER: Dict[Type, Callable] = {str: bin2char, int: bin2int, float: float2bin}
