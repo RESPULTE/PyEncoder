@@ -1,14 +1,9 @@
-from typing import Optional, Union, BinaryIO, Dict, Callable
-
-from pyencoder._type_hints import (
-    ValidDataType,
-    BinaryCode,
-)
+from typing import Union, Any, List, Tuple
 
 
-def encode(dataset: Union[str, list, tuple], dtype: ValidDataType, runtype: Optional[str] = "") -> BinaryCode:
+def encode(dataset: Union[str, list, tuple]) -> List[Tuple[Any, int]]:
     dataset_size = len(dataset)
-    encoded_data = ""
+    encoded_data = []
     curr_index = 0
 
     while curr_index < dataset_size:
@@ -21,21 +16,13 @@ def encode(dataset: Union[str, list, tuple], dtype: ValidDataType, runtype: Opti
             curr_index += 1
             count += 1
 
-        encoded_data += f"{curr_elem}|{count}|"
+        encoded_data.append((curr_elem, count))
 
-    return f"{runtype}|{encoded_data}"
+    return encoded_data
 
 
-def decode(encoded_data: BinaryCode, dtype: ValidDataType) -> ValidDataType:
-    runtype, _, encoded_data = encoded_data.partition("|")
-    if runtype != "":
-        pass
-    encoded_data = encoded_data.split("|")[:-1]
-    decoded_data = [
-        dtype(d)
-        for index, data in enumerate(encoded_data)
-        if index % 2 == 0
-        for d in [data] * int(encoded_data[index + 1])
-    ]
-
-    return decoded_data if dtype != str else "".join(decoded_data)
+def decode(encoded_data: List[Tuple[Any, int]]) -> List[Tuple[Any, int]]:
+    decoded_data = []
+    for data, count in encoded_data:
+        decoded_data.extend([data] * count)
+    return decoded_data
