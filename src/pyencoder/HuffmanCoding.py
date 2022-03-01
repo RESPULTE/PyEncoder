@@ -1,7 +1,6 @@
 from bisect import insort
 from functools import partial
-from collections import Counter
-from dataclasses import dataclass
+from collections import Counter, namedtuple
 from typing import BinaryIO, Callable, Dict, List, Tuple, Union
 
 from bitarray import bitarray
@@ -22,14 +21,7 @@ from pyencoder.config import (
 from pyencoder.utils import frombin, tobin
 
 
-@dataclass(frozen=True, slots=True)
-class Huffman_Node:
-    """
-    a intermediatry class to be used when constructing the huffman tree
-    """
-
-    left: Union["Huffman_Node", str]
-    right: Union["Huffman_Node", str]
+Huffman_Node = namedtuple("Huffman_Node", ["left", "right"])
 
 
 def encode(dataset: ValidDataset, *, decimal: int = 2) -> Tuple[str, str]:
@@ -92,7 +84,9 @@ def encode(dataset: ValidDataset, *, decimal: int = 2) -> Tuple[str, str]:
 
 
 def _encode_dataset(dataset: ValidDataset, catalogue: Dict[BinaryCode, ValidDataType]) -> BinaryCode:
-    """an internal function used to encode the dataset with the given huffman codes
+    """
+    [INTERNAL]
+    encode the dataset with the given huffman codes
 
     Args:
         dataset (Union[str, List[int], List[float]]): dataset to encode
@@ -109,7 +103,9 @@ def _encode_dataset(dataset: ValidDataset, catalogue: Dict[BinaryCode, ValidData
 
 
 def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType, binencoder: Callable) -> BinaryCode:
-    """an internal function to generate a binary representation of the huffmann tree
+    """
+    [INTERNAL]
+    generate a binary representation of the huffmann tree
 
     Args:
         huffman_tree (Huffman_Node): huffman node that is built/complete with data
@@ -178,7 +174,8 @@ def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType, bi
 def decode(
     huffman_string: str, encoded_data: str, data_size: int, dtype: ValidDataType, *, decimal: int = 2
 ) -> ValidDataset:
-    """decode the Huffman Coding string into the given data type
+    """
+    decode the Huffman Coding string into the given data type
 
     Args:
         huffman_string (str): a binary representation of the huffman tree
@@ -230,7 +227,8 @@ def decode(
 
 
 def dump(dataset: ValidDataset, file: BinaryIO, *, decimal: int = 2, delimiter: int = None, marker: int = None) -> None:
-    """encode the given dataset with Huffman Coding and write it to a file in binary
+    """
+    encode the given dataset with Huffman Coding and write it to a file in binary
 
     Args:
         dataset (ValidDataset): a dataset of type string, list of integer / float
@@ -298,21 +296,22 @@ def load(file: BinaryIO, *, delimiter: str = None, marker: str = None) -> ValidD
     dtype, huffman_string = _SUPPORTED_DTYPE_FROM_BIN[header[:_DTYPEMARKER_LEN].to01()], header[_DTYPEMARKER_LEN:]
 
     # seperate the header into the size of the data and the binary representation of huffman tree
-    huffman_datasize, huffman_string = (
+
+    max_datasize, huffman_string = (
         ba2int(huffman_string[:_DATA_BINARYSIZE_MARKER_LEN]),
         huffman_string[_DATA_BINARYSIZE_MARKER_LEN:],
     )
-
     if dtype == float:
         decimal, huffman_string = ba2int(huffman_string[:_DECIMAL_MARKER_LEN]), huffman_string[_DECIMAL_MARKER_LEN:]
-        return decode(huffman_string.to01(), encoded_data.to01(), huffman_datasize, dtype, decimal=decimal)
+        return decode(huffman_string.to01(), encoded_data.to01(), max_datasize, dtype, decimal=decimal)
 
-    return decode(huffman_string.to01(), encoded_data.to01(), huffman_datasize, dtype)
+    return decode(huffman_string.to01(), encoded_data.to01(), max_datasize, dtype)
 
 
 def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
     """
-    an internal function to create a huffman tree from a counted dataset, i.e frequency of each data s counted
+    [INTERNAL]
+    create a huffman tree from a counted dataset, i.e frequency of each data s counted
 
     Args:
         quantised_dataset (List[Tuple[ValidDataType, int]]): a counted dataset, i.e frequency of each data counted
@@ -334,7 +333,9 @@ def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]])
 
 
 def _build_tree_from_bitarray(huffmanString: str, data_size: int, bindecoder: Callable) -> Huffman_Node:
-    """an internal function to rebuild the huffman tree from a bitarray
+    """
+    [INTERNAL]
+    rebuild the huffman tree from a bitarray
 
     Args:
         huffmanString (str): a string of 0 and 1
@@ -364,9 +365,11 @@ def _build_tree_from_bitarray(huffmanString: str, data_size: int, bindecoder: Ca
 
 
 def _generate_catalogue(huffnode: Huffman_Node, tag: BinaryCode = "") -> Dict[BinaryCode, ValidDataType]:
-    """generate a dictionary for encoding purposes
-        key: huffman_code
-        value: actual data
+    """
+    [INTERNAL]
+    generate a dictionary for encoding purposes
+    - key: huffman_code
+    - value: actual data
 
     Args:
         huffnode (Huffman_Node): a huffman tree class

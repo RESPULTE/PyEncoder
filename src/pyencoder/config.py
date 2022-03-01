@@ -6,8 +6,8 @@ from typing import Dict, Type
 
 # TODO: fix the delimiter to include escape character -> '\0'
 
-DELIMITER = "哇"
-HUFFMARKER = "哇"
+DELIMITER = "`"
+HUFFMARKER = "`"
 BYTEORDER = "little"
 MAX_DECIMAL = 10
 
