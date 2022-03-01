@@ -1,10 +1,17 @@
 from typing import Dict, Type
 
+# TODO: make all the editable into properties
+# * let the private attribute depend on them
+# * soemthing like a module lvl properties
+
+# TODO: fix the delimiter to include escape character -> '\0'
+
 DELIMITER = "哇"
 HUFFMARKER = "哇"
 BYTEORDER = "little"
-_DECIMAL_MARKER_LEN = 8
+MAX_DECIMAL = 10
 
+_DECIMAL_MARKER_LEN = 4
 _DATA_BINARYSIZE_MARKER_LEN = 8
 _DATASIZEMARKER_LEN = 32
 _DTYPEMARKER_LEN = 2

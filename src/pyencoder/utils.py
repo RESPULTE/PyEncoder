@@ -1,17 +1,46 @@
 import struct
-from typing import Iterable, List, Any, Literal, NewType, Tuple, Union, Type
+from typing import Iterable, List, Any, Literal, NewType, Optional, Tuple, Union, Type
 
 from pyencoder._type_hints import BinaryCode
 
 Matrix2D = NewType("Matrix2D", List[List[Any]])
 
 
-def zigzag(dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: bool = False) -> List[Any]:
-    if inverse and not all(isinstance(data, Iterable) for data in dataset):
+def zigzag(
+    dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: Optional[bool] = False
+) -> Union[List[List[Any]], List[Any]]:
+    """generates a 1D array from a 2D array with the given runtype in a zig-zaggy fashion
+
+    Args:
+        dataset (Matrix2D): a 2D matrix which is a list made up of lists (nested list),
+                            that is symmetrical in its rows & columns
+
+        runtype (Literal['d', 'h', 'v']): traverses the given 2D matrix in the given runtype
+                                          'd' (diagonal): - traverse in a sideway Z pattern
+                                          'h' (horizontal): - traverse in a 'normal' Z pattern
+                                          'v' (vertical): - traverse in a N pattern
+
+        inverse (bool, optional): recreates a 1D dataset into 2D array in a zig zaggy fashion. Defaults to False.
+
+    Raises:
+        ValueError: if inverse is True, but the given dataset is not an iterable list
+        ValueError: if the element in the 2D dataset is not iterables, i.e not a nested list
+        ValueError: if the given 2D dataset is not symmetrical
+
+    Returns:
+        List[Any]: if the inverse is False
+        List[List[Any]]: if the inverse is True
+    """
+    if inverse and not isinstance(dataset, Iterable):
         raise ValueError("Invalid dataset, dataset must a 1D/non-nested iterable")
 
-    if not inverse and not isinstance(dataset, Iterable):
-        raise ValueError("Invalid dataset, dataset must a 2D/nested iterable")
+    if not inverse:
+        if all(isinstance(data, Iterable) for data in dataset):
+            raise ValueError("Invalid dataset, dataset must a 2D/nested iterable")
+        if sum(len(row) for row in dataset) % len(dataset[0]) != 0:
+            raise ValueError(
+                "Invalid dataset: dataset must be symmetrical, each row must have the same number of columns"
+            )
 
     valid_runtypes = {"d": generate_dzigzag_index, "h": generate_hzigzag_index, "v": generate_vzigzag_index}
     row, col = len(dataset), len(dataset[0])
@@ -28,7 +57,17 @@ def zigzag(dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: bool = F
     return matrix_2D
 
 
-def generate_dzigzag_index(row, col):
+def generate_dzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
+    """generate all the required indexes to turn a 2D array
+       into a 1D array in a zig-zaggy fashion in a shape of a sideway Z
+
+    Args:
+        row (int): number of row in the 2D array
+        col (int): number of columns in the 2D array
+
+    Returns:
+        List[Tuple[int, int]]: a list of tupe of indexes, (i, j)
+    """
     index_list = [[] for _ in range(row + col - 1)]
 
     for i in range(row):
@@ -43,6 +82,16 @@ def generate_dzigzag_index(row, col):
 
 
 def generate_vzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
+    """generate all the required indexes to turn a 2D array
+       into a 1D array in a zig-zaggy fashion in a shape of the 'N' letter
+
+    Args:
+        row (int): number of row in the 2D array
+        col (int): number of columns in the 2D array
+
+    Returns:
+        List[Tuple[int, int]]: a list of tupe of indexes, (i, j)
+    """
     datapacks = []
 
     for j in range(col):
@@ -57,6 +106,16 @@ def generate_vzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
 
 
 def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
+    """generate all the required indexes to turn a 2D array
+       into a 1D array in a zig-zaggy fashion in a shape of the 'Z' letter
+
+    Args:
+        row (int): number of row in the 2D array
+        col (int): number of columns in the 2D array
+
+    Returns:
+        List[Tuple[int, int]]: a list of tupe of indexes, (i, j)
+    """
     datapacks = []
 
     for i in range(row):
@@ -70,16 +129,41 @@ def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return datapacks
 
 
-def tobin(data: Union[int, float, str], dtype: Type, bitlength: int = 1, **kwargs) -> BinaryCode:
+def tobin(data: Union[int, float, str], **kwargs) -> BinaryCode:
+    """converts the given data into binary string of 0s andd 1s
+
+    Args:
+        data (Union[int, float, str]): integer, floats and strings are the only accepted data types
+
+    Raises:
+        TypeError: if the given data is not of the integer, floats or strings data type
+
+    Returns:
+        BinaryCode: a string of 0 and 1
+    """
     data2bin_converter = {str: char2bin, int: int2bin, float: float2bin}
+
+    dtype = type(data)
 
     if dtype not in data2bin_converter.keys():
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
 
-    return data2bin_converter[dtype](data=data, bitlength=bitlength, **kwargs)
+    return data2bin_converter[dtype](data=data, **kwargs)
 
 
 def frombin(data: BinaryCode, dtype: Union[int, float, str], **kwargs) -> Union[int, float, str]:
+    """converts a string of 0 and 1 back into the original data
+
+    Args:
+        data (BinaryCode): a string of 0 and 1
+        dtype (Union[int, float, str]): the desired data type to convert to
+
+    Raises:
+        TypeError: if the desired datatype is not of the integer, floats or strings data type
+
+    Returns:
+        Union[int, float, str]: converted data
+    """
     bin2data_converter = {str: bin2char, int: bin2int, float: bin2float}
     if dtype not in bin2data_converter.keys():
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
@@ -88,6 +172,18 @@ def frombin(data: BinaryCode, dtype: Union[int, float, str], **kwargs) -> Union[
 
 
 def bin2float(b: BinaryCode, decimal: int, signed: bool = False) -> float:
+    """converts a string of 0 and 1 into float
+
+    Args:
+        b (BinaryCode): a string of 0 and 1
+
+        decimal (int): the number of decimal places to convert to
+
+        signed (bool, optional): whether the float has a negative/positive sign. Defaults to False.
+
+    Returns:
+        float: a float data
+    """
     float_repr = list(str(bin2int(b, signed=signed)))
 
     decimal_index = len(float_repr) - decimal
@@ -97,18 +193,68 @@ def bin2float(b: BinaryCode, decimal: int, signed: bool = False) -> float:
 
 
 def float2bin(data: float, decimal: int, bitlength: int = 0, signed: bool = False) -> BinaryCode:
+    """converts float into a string of 1 and 0
+       - Done by first formatting it with the given decimal places and
+         converting it into integer by removing the decimal point
+
+    Args:
+        data (float): a float data
+        decimal (int): formats the float into the number of given decimal places
+
+        bitlength (int, optional): an optional parameter to pad the binary string to the given length.
+                                   if the generated string is longer than the given length, no changes will be made.
+                                   Defaults to 0.
+
+        signed (bool, optional): whether the float data has negative/positive sign. Defaults to False.
+
+    Returns:
+        BinaryCode: a string of 0 and 1
+    """
     return int2bin(int(format(data, f".{decimal}f").replace(".", "")), bitlength, signed)
 
 
-def char2bin(data: str, bitlength: int) -> BinaryCode:
+def char2bin(data: str, bitlength: int = 0) -> BinaryCode:
+    """converts a single unicode string character into a binary string of 0 and 1
+
+    Args:
+        data (str): a string of 0 and 1
+        bitlength (int, optional): an optional parameter to pad the binary string to the given length.
+                                   if the generated string is longer than the given length, no changes will be made.
+                                   Defaults to 0.
+
+    Returns:
+        BinaryCode: a string of 0 and 1
+    """
     return format(ord(data), f"0{bitlength}b")
 
 
 def bin2char(b: BinaryCode) -> str:
+    """converts a string of 0 and 1 into a single unicode character
+
+    Args:
+        b (BinaryCode): a string of 0 and 1
+
+    Returns:
+        str: a single unicode character
+    """
     return chr(int(b, 2))
 
 
 def int2bin(data: int, bitlength: int = 0, signed: bool = False) -> BinaryCode:
+    """converts an integer into a binary string
+
+    Args:
+        data (int): an integer data
+
+        bitlength (int, optional): an optional parameter to pad the binary string to the given length.
+                                   if the generated string is longer than the given length, no changes will be made.
+                                   Defaults to 0.
+
+        signed (bool, optional):  whether the integer data has negative/positive sign. Defaults to False.
+
+    Returns:
+        BinaryCode: a string of 0 and 1
+    """
     bin_int = format(data, f"0{bitlength}b")
     if not signed:
         return bin_int
@@ -119,6 +265,16 @@ def int2bin(data: int, bitlength: int = 0, signed: bool = False) -> BinaryCode:
 
 
 def bin2int(b: BinaryCode, signed: bool = False) -> int:
+    """converts a string of 0 and 1 into an integer
+
+
+    Args:
+        b (BinaryCode): a string of 0 and 1
+        signed (bool, optional): whether the integer data has negative/positive sign. Defaults to False.
+
+    Returns:
+        int: an integer data
+    """
     if not signed:
         return int(b, 2)
 
@@ -128,6 +284,17 @@ def bin2int(b: BinaryCode, signed: bool = False) -> int:
 
 
 def tobytes(data: Union[int, float, str]) -> bytes:
+    """converts the given data into python built-in byte type
+
+    Args:
+        data (Union[int, float, str]): data
+
+    Raises:
+        TypeError: if the given data is not of the integer, floats or strings data type
+
+    Returns:
+        bytes: a python built-in byte type data
+    """
     data2byte_converter = {
         str: ("s", data),
         int: ("i", data),
@@ -141,6 +308,18 @@ def tobytes(data: Union[int, float, str]) -> bytes:
 
 
 def frombytes(bytedata: bytes, dtype: Union[int, float, str]) -> Union[int, float, str]:
+    """converts byte into data with the given data type
+
+    Args:
+        bytedata (bytes): a python built-in byte type
+        dtype (Union[int, float, str]): data type
+
+    Raises:
+        TypeError: if the given data type is not of the integer, floats or string
+
+    Returns:
+        Union[int, float, str]: converted data in the given data type
+    """
     byte2data_converter = {
         str: ("s", bytedata),
         int: ("i", bytedata),
