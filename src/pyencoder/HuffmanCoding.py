@@ -1,30 +1,36 @@
-from bisect import insort
-from functools import partial
+from typing import BinaryIO, Callable, Dict, List, Tuple
 from collections import Counter, namedtuple
-from typing import BinaryIO, Callable, Dict, List, Tuple, Union
+from functools import partial
+from bisect import insort
 
 from bitarray import bitarray
 from bitarray.util import ba2int
 
-from pyencoder._type_hints import CompressionError, DecompressionError, BinaryCode, ValidDataType, ValidDataset
+from pyencoder.utils import frombin, tobin, partition_bitarray
+from pyencoder._type_hints import (
+    CorruptedHeaderError,
+    CorruptedDataError,
+    ValidDataType,
+    ValidDataset,
+    BinaryCode,
+)
 from pyencoder.config import (
-    _DTYPEMARKER_LEN,
-    _DATASIZEMARKER_LEN,
-    _DATA_BINARYSIZE_MARKER_LEN,
+    ENCODING_MARKER,
     _SUPPORTED_DTYPE_FROM_BIN,
     _SUPPORTED_DTYPE_TO_BIN,
-    DELIMITER,
-    HUFFMARKER,
-    _DECIMAL_MARKER_LEN,
-    MAX_DECIMAL,
+    _ENCODING_MARKER_SIZE,
+    _DECIMAL_MARKER_SIZE,
+    _HEADER_MARKER_SIZE,
+    _DTYPE_MARKER_SIZE,
+    _ELEM_MARKER_SIZE,
+    _MAX_DECIMAL,
 )
-from pyencoder.utils import frombin, tobin
 
 
 Huffman_Node = namedtuple("Huffman_Node", ["left", "right"])
 
 
-def encode(dataset: ValidDataset, *, decimal: int = 2) -> Tuple[str, str]:
+def encode(dataset: ValidDataset) -> Tuple[str, str]:
     """
     encode a given data with Huffman Coding
 
@@ -33,8 +39,7 @@ def encode(dataset: ValidDataset, *, decimal: int = 2) -> Tuple[str, str]:
 
         dtype (ValidDataType): specifying the data type that the datset
 
-        decimal (int, optional): will be used for the float to binary conversion if the datatype given is float.
-                                 Defaults to 2.
+        decimal (int, optional): will be used for the float to binary conversion if the datatype given is float. Defaults to 2.
 
     Raises:
         ValueError: if the decimal place given exceeds the maximum decimal place allowed (10)
@@ -42,48 +47,56 @@ def encode(dataset: ValidDataset, *, decimal: int = 2) -> Tuple[str, str]:
 
     Returns:
         Tuple[str, str]: - a binary string representing the huffman tree(for decoding purpose)
-                            * format: datatype_marker + binarydata_size + optional[decimal_marker] + huffman_string
                          - a binary string representing the actual encoded data
+
+    * format: datatype_marker + data_size + optional[decimal_marker] + huffman_string
     """
+
+    # type-checking
     if isinstance(dataset, str):
         dtype = str
+
     elif all(isinstance(data, int) for data in dataset):
         dtype = int
+
     else:
         try:
             dataset = [float(data) for data in dataset]
-        except TypeError:
-            raise CompressionError("inconsistent data type in dataset")
+
+        except TypeError as e:
+            raise TypeError("inconsistent data type in dataset").with_traceback(e.__traceback__)
         else:
             dtype = float
 
-    if decimal > MAX_DECIMAL:
-        raise ValueError(f"maximum decimal place exceeded: {MAX_DECIMAL}")
+            # check and get the max decimal place in the data
+            decimal = max([len(data) - data.index(".") - 1 for data in [str(d) for d in dataset]])
+            if decimal > _MAX_DECIMAL:
+                raise ValueError(f"maximum decimal place of '{_MAX_DECIMAL}' exceeded")
 
     # encoding the data
-    huffman_tree = _build_tree_from_dataset(Counter(dataset).most_common())
-    catalogue = {v: k for k, v in _generate_catalogue(huffman_tree).items()}
-    encoded_data = _encode_dataset(dataset, catalogue)
+    huffman_tree = build_tree_from_dataset(Counter(dataset).most_common())
+    catalogue = {v: k for k, v in generate_catalogue(huffman_tree).items()}
+    encoded_data = encode_dataset(dataset, catalogue)
 
-    # generating the string repr of the huffman tree
+    # generating the header for the huffman encoding
     binencoder_config = {
         str: {},
         int: {"signed": True},
         float: {"decimal": decimal, "signed": True},
     }
-    dtype_marker = _SUPPORTED_DTYPE_TO_BIN[dtype]
     binencoder = partial(tobin, **binencoder_config[dtype])
-    header = dtype_marker + _generate_huffmanstring(huffman_tree, dtype, binencoder)
+    header = _SUPPORTED_DTYPE_TO_BIN[dtype] + generate_huffmanstring(huffman_tree, dtype, binencoder)
 
+    # adding the decimal place indicator
     if dtype == float:
-        decimal_marker = format(decimal, f"0{_DECIMAL_MARKER_LEN}b")
-        decimal_marker_index = _DTYPEMARKER_LEN + _DATA_BINARYSIZE_MARKER_LEN
+        decimal_marker = format(decimal, f"0{_DECIMAL_MARKER_SIZE}b")
+        decimal_marker_index = _DTYPE_MARKER_SIZE + _ELEM_MARKER_SIZE
         header = header[:decimal_marker_index] + decimal_marker + header[decimal_marker_index:]
 
     return header, encoded_data
 
 
-def _encode_dataset(dataset: ValidDataset, catalogue: Dict[BinaryCode, ValidDataType]) -> BinaryCode:
+def encode_dataset(dataset: ValidDataset, catalogue: Dict[BinaryCode, ValidDataType]) -> BinaryCode:
     """
     [INTERNAL]
     encode the dataset with the given huffman codes
@@ -102,7 +115,9 @@ def _encode_dataset(dataset: ValidDataset, catalogue: Dict[BinaryCode, ValidData
     return "".join([catalogue[data] for data in dataset])
 
 
-def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType, binencoder: Callable) -> BinaryCode:
+def generate_huffmanstring(
+    huffman_tree: Huffman_Node, dtype: ValidDataType, binencoder: Callable[[ValidDataType], BinaryCode]
+) -> BinaryCode:
     """
     [INTERNAL]
     generate a binary representation of the huffmann tree
@@ -118,7 +133,7 @@ def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType, bi
         BinaryCode:  a string of 1 and 0
     """
 
-    def traverse_huffmantree(huffman_tree: Huffman_Node, max_bitsize: List[int]) -> List[str]:
+    def traverse_huffmantree(huffman_tree: Huffman_Node, max_bitsize: int = 0) -> List[str]:
         """
         a recursive internal, internal function to recursively turn the huffman tree into a list of binary string
         and grab the maximum binary string's length of the encoded data
@@ -141,21 +156,16 @@ def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType, bi
         if not isinstance(huffman_tree, Huffman_Node):
             bindata = binencoder(huffman_tree)
             bindatalen = len(bindata)
-            if bindatalen > max_bitsize[0]:
-                max_bitsize[0] = bindatalen
-
-            return ["0", bindata]
+            return ["0", bindata], bindatalen if bindatalen > max_bitsize else max_bitsize
 
         huffmanString = ["1"]
         for node in [huffman_tree.left, huffman_tree.right]:
-            huffmanString.extend(traverse_huffmantree(node, max_bitsize))
+            binary_code, max_bitsize = traverse_huffmantree(node, max_bitsize)
+            huffmanString.extend(binary_code)
 
-        return huffmanString
+        return huffmanString, max_bitsize
 
-    max_bitsize = [0]
-    huffman_list = traverse_huffmantree(huffman_tree, max_bitsize)
-    max_bitsize = max_bitsize[0]
-
+    huffman_list, max_bitsize = traverse_huffmantree(huffman_tree)
     if dtype != str:
         # to preserve the sign of an integer/float
         for index, data in enumerate(huffman_list):
@@ -166,7 +176,7 @@ def _generate_huffmanstring(huffman_tree: Huffman_Node, dtype: ValidDataType, bi
             if huffman_list[index - 1] == "0":
                 huffman_list[index] = data.zfill(max_bitsize)
 
-    huffman_list.insert(0, format(max_bitsize, f"0{_DATA_BINARYSIZE_MARKER_LEN}b"))
+    huffman_list.insert(0, format(max_bitsize, f"0{_ELEM_MARKER_SIZE}b"))
 
     return "".join(huffman_list)
 
@@ -194,16 +204,16 @@ def decode(
     Returns:
         ValidDataset: decoded data in the given dataset
     """
-    try:
-        bindecoder_config = {
-            str: {"dtype": str},
-            int: {"signed": True, "dtype": int},
-            float: {"decimal": decimal, "signed": True, "dtype": float},
-        }
-        bindecoder = partial(frombin, **bindecoder_config[dtype])
-        huffman_tree = _build_tree_from_bitarray(huffman_string, data_size, bindecoder)
-        catalogue = _generate_catalogue(huffman_tree)
+    bindecoder_config = {
+        str: {"dtype": str},
+        int: {"signed": True, "dtype": int},
+        float: {"decimal": decimal, "signed": True, "dtype": float},
+    }
+    bindecoder = partial(frombin, **bindecoder_config[dtype])
+    huffman_tree = build_tree_from_huffmanstring(huffman_string, data_size, bindecoder)
+    catalogue = generate_catalogue(huffman_tree)
 
+    try:
         current_node = huffman_tree
         decoded_data = []
         curr_tag = ""
@@ -220,13 +230,13 @@ def decode(
                 continue
 
     except Exception as e:
-        raise DecompressionError(f"Unknown error has occured -> {e}")
+        raise CorruptedDataError(f"encoded huffman data is unusable, error occured -> {e}")
 
     else:
         return "".join(decoded_data) if dtype == str else decoded_data
 
 
-def dump(dataset: ValidDataset, file: BinaryIO, *, decimal: int = 2, delimiter: int = None, marker: int = None) -> None:
+def dump(dataset: ValidDataset, file: BinaryIO, marker: ValidDataType = None) -> None:
     """
     encode the given dataset with Huffman Coding and write it to a file in binary
 
@@ -244,23 +254,24 @@ def dump(dataset: ValidDataset, file: BinaryIO, *, decimal: int = 2, delimiter: 
                                 if None is given, a random unicode character of my selection will be used instead
 
     """
-    delimiter = tobin(delimiter if delimiter else DELIMITER)
-    marker = tobin(marker if marker else HUFFMARKER)
+    marker = tobin(marker or ENCODING_MARKER)
 
-    header, encoded_data = encode(dataset, decimal=decimal)
+    header, encoded_data = encode(dataset)
+
+    header = format(len(header), f"0{_HEADER_MARKER_SIZE}b") + header
 
     # the actual data
-    huffman_data = header + delimiter + encoded_data
+    huffman_data = header + encoded_data
 
     # the size of the entire huffmancoding
-    huffmancoding_size = format(len(huffman_data), f"0{_DATASIZEMARKER_LEN}b")
+    huffmancoding_size = format(len(huffman_data), f"0{_ENCODING_MARKER_SIZE}b")
 
     datapack = bitarray(marker + huffmancoding_size + huffman_data)
 
     datapack.tofile(file)
 
 
-def load(file: BinaryIO, *, delimiter: str = None, marker: str = None) -> ValidDataset:
+def load(file: BinaryIO, marker: ValidDataType = None) -> ValidDataset:
     """
     load the huffman coding from a binary file an decodes it
 
@@ -279,36 +290,38 @@ def load(file: BinaryIO, *, delimiter: str = None, marker: str = None) -> ValidD
     Returns:
         ValidDataset: the decoded data
     """
-    marker = tobin(marker if marker else HUFFMARKER)
-    delimiter = tobin(delimiter if delimiter else DELIMITER)
-
     encoded_huffdata = bitarray()
     encoded_huffdata.frombytes(file.read())
 
-    _, encoded_huffdata = __partition_bitarray(encoded_huffdata, marker)
+    _, encoded_huffdata = partition_bitarray(encoded_huffdata, tobin(marker or ENCODING_MARKER))
 
-    huffmancoding_size = ba2int(encoded_huffdata[:_DATASIZEMARKER_LEN])
+    huffmancoding_size = ba2int(encoded_huffdata[:_ENCODING_MARKER_SIZE])
 
-    huffman_data = encoded_huffdata[_DATASIZEMARKER_LEN : _DATASIZEMARKER_LEN + huffmancoding_size]
+    huffman_data = encoded_huffdata[_ENCODING_MARKER_SIZE : _ENCODING_MARKER_SIZE + huffmancoding_size]
 
-    header, encoded_data = __partition_bitarray(huffman_data, delimiter)
+    header_len, huffman_data = partition_bitarray(huffman_data, index=_HEADER_MARKER_SIZE)
 
-    dtype, huffman_string = _SUPPORTED_DTYPE_FROM_BIN[header[:_DTYPEMARKER_LEN].to01()], header[_DTYPEMARKER_LEN:]
+    header, encoded_data = partition_bitarray(huffman_data, index=ba2int(header_len))
 
-    # seperate the header into the size of the data and the binary representation of huffman tree
+    dtype, huffman_string = partition_bitarray(header, index=_DTYPE_MARKER_SIZE)
 
-    max_datasize, huffman_string = (
-        ba2int(huffman_string[:_DATA_BINARYSIZE_MARKER_LEN]),
-        huffman_string[_DATA_BINARYSIZE_MARKER_LEN:],
-    )
-    if dtype == float:
-        decimal, huffman_string = ba2int(huffman_string[:_DECIMAL_MARKER_LEN]), huffman_string[_DECIMAL_MARKER_LEN:]
-        return decode(huffman_string.to01(), encoded_data.to01(), max_datasize, dtype, decimal=decimal)
+    data_size, huffman_string = partition_bitarray(huffman_string, index=_ELEM_MARKER_SIZE)
 
-    return decode(huffman_string.to01(), encoded_data.to01(), max_datasize, dtype)
+    data_to_decode = {
+        "huffman_string": huffman_string.to01(),
+        "encoded_data": encoded_data.to01(),
+        "data_size": ba2int(data_size),
+        "dtype": _SUPPORTED_DTYPE_FROM_BIN[dtype.to01()],
+    }
+
+    if data_to_decode["dtype"] == float:
+        decimal, huffman_string = partition_bitarray(huffman_string, index=_DECIMAL_MARKER_SIZE)
+        data_to_decode.update(decimal=ba2int(decimal), huffman_string=huffman_string.to01())
+
+    return decode(**data_to_decode)
 
 
-def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
+def build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
     """
     [INTERNAL]
     create a huffman tree from a counted dataset, i.e frequency of each data s counted
@@ -332,7 +345,9 @@ def _build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]])
     return quantised_dataset[0][0]
 
 
-def _build_tree_from_bitarray(huffmanString: str, data_size: int, bindecoder: Callable) -> Huffman_Node:
+def build_tree_from_huffmanstring(
+    huffmanString: str, data_size: int, bindecoder: Callable[[BinaryCode], ValidDataType]
+) -> Huffman_Node:
     """
     [INTERNAL]
     rebuild the huffman tree from a bitarray
@@ -361,10 +376,13 @@ def _build_tree_from_bitarray(huffmanString: str, data_size: int, bindecoder: Ca
         right_child, to_process = traversal_builder(to_process)
         return Huffman_Node(left=left_child, right=right_child), to_process
 
-    return traversal_builder(huffmanString)[0]
+    try:
+        return traversal_builder(huffmanString)[0]
+    except Exception as err:
+        raise CorruptedHeaderError(f"huffmanstring used is unusable, error occured -> {err}")
 
 
-def _generate_catalogue(huffnode: Huffman_Node, tag: BinaryCode = "") -> Dict[BinaryCode, ValidDataType]:
+def generate_catalogue(huffnode: Huffman_Node, tag: BinaryCode = "") -> Dict[BinaryCode, ValidDataType]:
     """
     [INTERNAL]
     generate a dictionary for encoding purposes
@@ -382,21 +400,7 @@ def _generate_catalogue(huffnode: Huffman_Node, tag: BinaryCode = "") -> Dict[Bi
         return {tag: huffnode}
 
     catalogue = {}
-    catalogue.update(_generate_catalogue(huffnode.left, tag + "0"))
-    catalogue.update(_generate_catalogue(huffnode.right, tag + "1"))
+    catalogue.update(generate_catalogue(huffnode.left, tag + "0"))
+    catalogue.update(generate_catalogue(huffnode.right, tag + "1"))
 
     return catalogue
-
-
-def __partition_bitarray(bitstring: bitarray, delimiter: BinaryCode) -> Tuple[bitarray, bitarray]:
-    """a helper function to parition the bitarray into two parts with the given delimeter
-
-    Args:
-        bitstring (bitarray): an array containning 0 and 1
-        delimiter (BinaryCode): string containning 1 and 0
-
-    Returns:
-        Tuple[bitarray, bitarray]: two part of the seperated bitarray
-    """
-    sep_index = bitstring.index(bitarray(delimiter))
-    return bitstring[:sep_index], bitstring[sep_index + len(delimiter) :]

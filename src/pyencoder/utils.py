@@ -1,5 +1,6 @@
 import struct
-from typing import Iterable, List, Any, Literal, NewType, Optional, Tuple, Union, Type
+from bitarray import bitarray
+from typing import Any, Iterable, List, Literal, NewType, Optional, Tuple, Type, Union
 
 from pyencoder._type_hints import BinaryCode
 
@@ -185,7 +186,6 @@ def bin2float(b: BinaryCode, decimal: int, signed: bool = False) -> float:
         float: a float data
     """
     float_repr = list(str(bin2int(b, signed=signed)))
-
     decimal_index = len(float_repr) - decimal
     float_repr[decimal_index:decimal_index] = "."
 
@@ -296,15 +296,18 @@ def tobytes(data: Union[int, float, str]) -> bytes:
         bytes: a python built-in byte type data
     """
     data2byte_converter = {
-        str: ("s", data),
-        int: ("i", data),
-        float: ("f", data),
+        str: "s",
+        int: "i",
+        float: "f",
     }
     dtype = type(data)
+    if dtype == str:
+        data = data.encode("utf-8")
+
     if dtype not in data2byte_converter.keys():
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
 
-    return struct.pack(*data2byte_converter[dtype])
+    return struct.pack(data2byte_converter[dtype], data)
 
 
 def frombytes(bytedata: bytes, dtype: Union[int, float, str]) -> Union[int, float, str]:
@@ -329,3 +332,27 @@ def frombytes(bytedata: bytes, dtype: Union[int, float, str]) -> Union[int, floa
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
 
     return struct.unpack(*byte2data_converter[dtype])[0]
+
+
+def partition_bitarray(
+    bitstring: bitarray, delimiter: BinaryCode = None, index: int = None
+) -> Tuple[bitarray, bitarray]:
+    """a helper function to parition the bitarray into two parts with the given delimeter
+
+    Args:
+        bitstring (bitarray): an array containning 0 and 1
+        delimiter (BinaryCode): string containning 1 and 0
+
+    Returns:
+        Tuple[bitarray, bitarray]: two part of the seperated bitarray
+    """
+    if (not index and not delimiter) or (index and delimiter):
+        raise ValueError("either an index or a delimiter is required")
+
+    left_end = right_start = index
+
+    if delimiter:
+        left_end = bitstring.index(bitarray(delimiter))
+        right_start = left_end + len(delimiter)
+
+    return bitstring[:left_end], bitstring[right_start:]

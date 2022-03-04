@@ -5,18 +5,18 @@ ValidDataType = TypeVar("ValidDataType", str, int, float)
 ValidDataset = TypeVar("ValidDataset", str, List[int], List[float])
 BinaryCode = NewType("BitCode", str)
 
-# TODO: better naming of the errors
-class DecompressionError(Exception):
+
+class DecodingError(Exception):
     pass
 
 
-class CompressionError(Exception):
+class EncodingError(Exception):
     pass
 
 
-class CorruptedHuffmanStringError(Exception):
+class CorruptedHeaderError(Exception):
     pass
 
 
-class CorruptedHuffmanDataError(Exception):
+class CorruptedDataError(Exception):
     pass
