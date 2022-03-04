@@ -33,11 +33,11 @@ def zigzag(
         List[List[Any]]: if the inverse is True
     """
     if inverse and not isinstance(dataset, Iterable):
-        raise ValueError("Invalid dataset, dataset must a 1D/non-nested iterable")
+        raise ValueError("dataset must a 1D/non-nested iterable")
 
     if not inverse:
-        if all(isinstance(data, Iterable) for data in dataset):
-            raise ValueError("Invalid dataset, dataset must a 2D/nested iterable")
+        if not all(isinstance(data, Iterable) for data in dataset):
+            raise ValueError("dataset must a 2D/nested iterable")
         if sum(len(row) for row in dataset) % len(dataset[0]) != 0:
             raise ValueError(
                 "Invalid dataset: dataset must be symmetrical, each row must have the same number of columns"
