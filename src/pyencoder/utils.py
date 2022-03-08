@@ -1,8 +1,11 @@
+import re
 import struct
 from bitarray import bitarray
 from typing import Any, Iterable, List, Literal, NewType, Optional, Tuple, Type, Union
 
-from pyencoder._type_hints import BinaryCode
+from numpy import sign
+
+from pyencoder._type_hints import BitCode
 
 Matrix2D = NewType("Matrix2D", List[List[Any]])
 
@@ -130,7 +133,7 @@ def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return datapacks
 
 
-def tobin(data: Union[int, float, str], **kwargs) -> BinaryCode:
+def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Optional[Type] = None) -> BitCode:
     """converts the given data into binary string of 0s andd 1s
 
     Args:
@@ -142,17 +145,26 @@ def tobin(data: Union[int, float, str], **kwargs) -> BinaryCode:
     Returns:
         BinaryCode: a string of 0 and 1
     """
-    data2bin_converter = {str: char2bin, int: int2bin, float: float2bin}
+    data2bin_config = {
+        str: lambda x: str.encode(x, "utf-8"),
+        int: lambda x: struct.pack(">h", x),
+        float: lambda x: struct.pack(">f", x),
+    }
 
-    dtype = type(data)
-
-    if dtype not in data2bin_converter.keys():
+    dtype = type(data) if not dtype else dtype
+    if dtype not in data2bin_config.keys():
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
 
-    return data2bin_converter[dtype](data=data, **kwargs)
+    bindata = "".join("{:08b}".format(b) for b in data2bin_config[dtype](data))
+    binlen = len(bindata)
+
+    if binlen > bitlength:
+        return bindata.removeprefix("0" * (binlen - bitlength))
+
+    return bindata.zfill(bitlength)
 
 
-def frombin(data: BinaryCode, dtype: Union[int, float, str], **kwargs) -> Union[int, float, str]:
+def frombin(data: BitCode, dtype: Union[int, float, str]) -> Union[int, float, str]:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -165,178 +177,21 @@ def frombin(data: BinaryCode, dtype: Union[int, float, str], **kwargs) -> Union[
     Returns:
         Union[int, float, str]: converted data
     """
-    bin2data_converter = {str: bin2char, int: bin2int, float: bin2float}
+    bin2data_converter = {
+        str: lambda x: bytes.decode(x, "utf8"),
+        int: lambda x: struct.unpack(">h", x)[0],
+        float: lambda x: round(struct.unpack(">f", x)[0], 3),
+    }
+
     if dtype not in bin2data_converter.keys():
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
 
-    return bin2data_converter[dtype](b=data, **kwargs)
+    byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder="big")
+
+    return bin2data_converter[dtype](byte_data)
 
 
-def bin2float(b: BinaryCode, decimal: int, signed: bool = False) -> float:
-    """converts a string of 0 and 1 into float
-
-    Args:
-        b (BinaryCode): a string of 0 and 1
-
-        decimal (int): the number of decimal places to convert to
-
-        signed (bool, optional): whether the float has a negative/positive sign. Defaults to False.
-
-    Returns:
-        float: a float data
-    """
-    float_repr = list(str(bin2int(b, signed=signed)))
-    decimal_index = len(float_repr) - decimal
-    float_repr[decimal_index:decimal_index] = "."
-
-    return float("".join(float_repr))
-
-
-def float2bin(data: float, decimal: int, bitlength: int = 0, signed: bool = False) -> BinaryCode:
-    """converts float into a string of 1 and 0
-       - Done by first formatting it with the given decimal places and
-         converting it into integer by removing the decimal point
-
-    Args:
-        data (float): a float data
-        decimal (int): formats the float into the number of given decimal places
-
-        bitlength (int, optional): an optional parameter to pad the binary string to the given length.
-                                   if the generated string is longer than the given length, no changes will be made.
-                                   Defaults to 0.
-
-        signed (bool, optional): whether the float data has negative/positive sign. Defaults to False.
-
-    Returns:
-        BinaryCode: a string of 0 and 1
-    """
-    return int2bin(int(format(data, f".{decimal}f").replace(".", "")), bitlength, signed)
-
-
-def char2bin(data: str, bitlength: int = 0) -> BinaryCode:
-    """converts a single unicode string character into a binary string of 0 and 1
-
-    Args:
-        data (str): a string of 0 and 1
-        bitlength (int, optional): an optional parameter to pad the binary string to the given length.
-                                   if the generated string is longer than the given length, no changes will be made.
-                                   Defaults to 0.
-
-    Returns:
-        BinaryCode: a string of 0 and 1
-    """
-    return format(ord(data), f"0{bitlength}b")
-
-
-def bin2char(b: BinaryCode) -> str:
-    """converts a string of 0 and 1 into a single unicode character
-
-    Args:
-        b (BinaryCode): a string of 0 and 1
-
-    Returns:
-        str: a single unicode character
-    """
-    return chr(int(b, 2))
-
-
-def int2bin(data: int, bitlength: int = 0, signed: bool = False) -> BinaryCode:
-    """converts an integer into a binary string
-
-    Args:
-        data (int): an integer data
-
-        bitlength (int, optional): an optional parameter to pad the binary string to the given length.
-                                   if the generated string is longer than the given length, no changes will be made.
-                                   Defaults to 0.
-
-        signed (bool, optional):  whether the integer data has negative/positive sign. Defaults to False.
-
-    Returns:
-        BinaryCode: a string of 0 and 1
-    """
-    bin_int = format(data, f"0{bitlength}b")
-    if not signed:
-        return bin_int
-
-    if data > 0:
-        return "0" + bin_int
-    return "1" + bin_int[1:]
-
-
-def bin2int(b: BinaryCode, signed: bool = False) -> int:
-    """converts a string of 0 and 1 into an integer
-
-
-    Args:
-        b (BinaryCode): a string of 0 and 1
-        signed (bool, optional): whether the integer data has negative/positive sign. Defaults to False.
-
-    Returns:
-        int: an integer data
-    """
-    if not signed:
-        return int(b, 2)
-
-    sign_bit = b[0]
-    i = int(b[1:], 2)
-    return -i if sign_bit == "1" else i
-
-
-def tobytes(data: Union[int, float, str]) -> bytes:
-    """converts the given data into python built-in byte type
-
-    Args:
-        data (Union[int, float, str]): data
-
-    Raises:
-        TypeError: if the given data is not of the integer, floats or strings data type
-
-    Returns:
-        bytes: a python built-in byte type data
-    """
-    data2byte_converter = {
-        str: "s",
-        int: "i",
-        float: "f",
-    }
-    dtype = type(data)
-    if dtype == str:
-        data = data.encode("utf-8")
-
-    if dtype not in data2byte_converter.keys():
-        raise TypeError(f"data type not supported: '{dtype.__name__}'")
-
-    return struct.pack(data2byte_converter[dtype], data)
-
-
-def frombytes(bytedata: bytes, dtype: Union[int, float, str]) -> Union[int, float, str]:
-    """converts byte into data with the given data type
-
-    Args:
-        bytedata (bytes): a python built-in byte type
-        dtype (Union[int, float, str]): data type
-
-    Raises:
-        TypeError: if the given data type is not of the integer, floats or string
-
-    Returns:
-        Union[int, float, str]: converted data in the given data type
-    """
-    byte2data_converter = {
-        str: ("s", bytedata),
-        int: ("i", bytedata),
-        float: ("f", bytedata),
-    }
-    if dtype not in byte2data_converter.keys():
-        raise TypeError(f"data type not supported: '{dtype.__name__}'")
-
-    return struct.unpack(*byte2data_converter[dtype])[0]
-
-
-def partition_bitarray(
-    bitstring: bitarray, delimiter: BinaryCode = None, index: int = None
-) -> Tuple[bitarray, bitarray]:
+def partition_bitarray(bitstring: bitarray, delimiter: BitCode = None, index: int = None) -> Tuple[bitarray, bitarray]:
     """a helper function to parition the bitarray into two parts with the given delimeter
 
     Args:

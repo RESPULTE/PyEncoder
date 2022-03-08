@@ -1,5 +1,6 @@
-from typing import BinaryIO, Callable, Dict, List, Tuple
-from collections import Counter, namedtuple
+from re import U
+from typing import BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
+from collections import Counter, namedtuple, OrderedDict
 from functools import partial
 from bisect import insort
 
@@ -12,7 +13,7 @@ from pyencoder._type_hints import (
     CorruptedDataError,
     ValidDataType,
     ValidDataset,
-    BinaryCode,
+    BitCode,
 )
 from pyencoder.config import (
     ENCODING_MARKER,
@@ -27,159 +28,9 @@ from pyencoder.config import (
 )
 
 
-Huffman_Node = namedtuple("Huffman_Node", ["left", "right"])
+Huffcode = namedtuple("Huffcode", ["bitcode", "bitlength"])
 
-
-def encode(dataset: ValidDataset) -> Tuple[str, str]:
-    """
-    encode a given data with Huffman Coding
-
-    Args:
-        dataset (Union[str, list, tuple]): data of the type string, a list of int / float
-
-        dtype (ValidDataType): specifying the data type that the datset
-
-        decimal (int, optional): will be used for the float to binary conversion if the datatype given is float. Defaults to 2.
-
-    Raises:
-        ValueError: if the decimal place given exceeds the maximum decimal place allowed (10)
-        TypeError: if the dataset given does not have homogenous datatype
-
-    Returns:
-        Tuple[str, str]: - a binary string representing the huffman tree(for decoding purpose)
-                         - a binary string representing the actual encoded data
-
-    * format: datatype_marker + data_size + optional[decimal_marker] + huffman_string
-    """
-
-    # type-checking
-    if isinstance(dataset, str):
-        dtype = str
-
-    elif all(isinstance(data, int) for data in dataset):
-        dtype = int
-
-    else:
-        try:
-            dataset = [float(data) for data in dataset]
-
-        except TypeError as e:
-            raise TypeError("inconsistent data type in dataset").with_traceback(e.__traceback__)
-        else:
-            dtype = float
-
-            # check and get the max decimal place in the data
-            decimal = max([len(data) - data.index(".") - 1 for data in [str(d) for d in dataset]])
-            if decimal > _MAX_DECIMAL:
-                raise ValueError(f"maximum decimal place of '{_MAX_DECIMAL}' exceeded")
-
-    # encoding the data
-    huffman_tree = build_tree_from_dataset(Counter(dataset).most_common())
-    catalogue = {v: k for k, v in generate_catalogue(huffman_tree).items()}
-    encoded_data = encode_dataset(dataset, catalogue)
-
-    # generating the header for the huffman encoding
-    binencoder_config = {
-        str: {},
-        int: {"signed": True},
-        float: {"decimal": decimal, "signed": True},
-    }
-    binencoder = partial(tobin, **binencoder_config[dtype])
-    header = _SUPPORTED_DTYPE_TO_BIN[dtype] + generate_huffmanstring(huffman_tree, dtype, binencoder)
-
-    # adding the decimal place indicator
-    if dtype == float:
-        decimal_marker = format(decimal, f"0{_DECIMAL_MARKER_SIZE}b")
-        decimal_marker_index = _DTYPE_MARKER_SIZE + _ELEM_MARKER_SIZE
-        header = header[:decimal_marker_index] + decimal_marker + header[decimal_marker_index:]
-
-    return header, encoded_data
-
-
-def encode_dataset(dataset: ValidDataset, catalogue: Dict[BinaryCode, ValidDataType]) -> BinaryCode:
-    """
-    [INTERNAL]
-    encode the dataset with the given huffman codes
-
-    Args:
-        dataset (Union[str, List[int], List[float]]): dataset to encode
-
-        catalogue (Dict[BinaryCode, ValidDataset]):
-        a dictionary containing the binary code representing the data as th ekey and the data itself as the value
-
-    Returns:
-        BinaryCode: a string of 1 and 0
-    """
-    if isinstance(dataset, str):
-        dataset = list(dataset)
-    return "".join([catalogue[data] for data in dataset])
-
-
-def generate_huffmanstring(
-    huffman_tree: Huffman_Node, dtype: ValidDataType, binencoder: Callable[[ValidDataType], BinaryCode]
-) -> BinaryCode:
-    """
-    [INTERNAL]
-    generate a binary representation of the huffmann tree
-
-    Args:
-        huffman_tree (Huffman_Node): huffman node that is built/complete with data
-
-        binencoder (Callable): an encoder, complete with all the keyword specification (sign/decimal),
-                               to encode the data into binary string
-                               [using partial from functools to achieve this]
-
-    Returns:
-        BinaryCode:  a string of 1 and 0
-    """
-
-    def traverse_huffmantree(huffman_tree: Huffman_Node, max_bitsize: int = 0) -> List[str]:
-        """
-        a recursive internal, internal function to recursively turn the huffman tree into a list of binary string
-        and grab the maximum binary string's length of the encoded data
-            - "0" marks the beginning of the actual encoded data
-            - "1" marks the internal node
-
-        Args:
-            huffman_tree (Huffman_Node): huffman node that is built/complete with data
-
-
-            max_bitsize (List[int]):- used for the sole purpose of getting the maximum binary string's length
-                                       to pad the encoded data afterwards and ensure consistent data length
-                                    * contains a single integer in the list
-                                    * make use of the mutable nature of the python's list to recursively alter the data
-
-
-        Returns:
-            List[str]: a list of 0s and 1s representing the huffman tree
-        """
-        if not isinstance(huffman_tree, Huffman_Node):
-            bindata = binencoder(huffman_tree)
-            bindatalen = len(bindata)
-            return ["0", bindata], bindatalen if bindatalen > max_bitsize else max_bitsize
-
-        huffmanString = ["1"]
-        for node in [huffman_tree.left, huffman_tree.right]:
-            binary_code, max_bitsize = traverse_huffmantree(node, max_bitsize)
-            huffmanString.extend(binary_code)
-
-        return huffmanString, max_bitsize
-
-    huffman_list, max_bitsize = traverse_huffmantree(huffman_tree)
-    if dtype != str:
-        # to preserve the sign of an integer/float
-        for index, data in enumerate(huffman_list):
-            if huffman_list[index - 1] == "0":
-                huffman_list[index] = data[0] + data[1:].zfill(max_bitsize - 1)
-    else:
-        for index, data in enumerate(huffman_list):
-            if huffman_list[index - 1] == "0":
-                huffman_list[index] = data.zfill(max_bitsize)
-
-    huffman_list.insert(0, format(max_bitsize, f"0{_ELEM_MARKER_SIZE}b"))
-
-    return "".join(huffman_list)
-
+'''
 
 def decode(
     huffman_string: str, encoded_data: str, data_size: int, dtype: ValidDataType, *, decimal: int = 2
@@ -234,6 +85,8 @@ def decode(
 
     else:
         return "".join(decoded_data) if dtype == str else decoded_data
+
+'''
 
 
 def dump(dataset: ValidDataset, file: BinaryIO, marker: ValidDataType = None) -> None:
@@ -318,89 +171,82 @@ def load(file: BinaryIO, marker: ValidDataType = None) -> ValidDataset:
         decimal, huffman_string = partition_bitarray(huffman_string, index=_DECIMAL_MARKER_SIZE)
         data_to_decode.update(decimal=ba2int(decimal), huffman_string=huffman_string.to01())
 
-    return decode(**data_to_decode)
+    # return decode(**data_to_decode)
 
 
-def build_tree_from_dataset(quantised_dataset: List[Tuple[ValidDataType, int]]) -> Huffman_Node:
-    """
-    [INTERNAL]
-    create a huffman tree from a counted dataset, i.e frequency of each data s counted
+def generate_header(canonical_codebook: OrderedDict[Union[str, int, float], Huffcode], dtype: Type = str) -> BitCode:
+    bitlengths: List[BitCode] = ["0" * 8 for _ in range(0, 16 - 1)]
+    symbols: List[BitCode] = []
 
-    Args:
-        quantised_dataset (List[Tuple[ValidDataType, int]]): a counted dataset, i.e frequency of each data counted
+    curr_code_sum = 0
+    curr_bitlength = 1
+    for symbol, huffcode in canonical_codebook.items():
 
-    Returns:
-        Huffman_Node: a huffman tree
-    """
-    while len(quantised_dataset) != 1:
-        (data1, freq_1), (data2, freq_2) = quantised_dataset[:-3:-1]
+        if huffcode.bitlength != curr_bitlength:
+            bitlengths[curr_bitlength] = tobin(curr_code_sum)
+            curr_bitlength = huffcode.bitlength
+            curr_code_sum = 0
 
-        quantised_dataset = quantised_dataset[:-2]
+        symbols.append(tobin(symbol))
+        curr_code_sum += 1
+
+    return "".join(_SUPPORTED_DTYPE_TO_BIN[dtype] + bitlengths + symbols)
+
+
+def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Huffcode], BitCode]:
+    if isinstance(dataset, str):
+        dtype = str
+
+    elif all(isinstance(data, int) for data in dataset):
+        dtype = int
+
+    else:
+        try:
+            dataset = [float(data) for data in dataset]
+
+        except TypeError:
+            raise TypeError("inconsistent data type in dataset")
+
+        else:
+            dtype = float
+
+    counted_dataset = [([symbol], count) for symbol, count in Counter(dataset).most_common()]
+    codebook = {symbol[0]: 0 for symbol, _ in counted_dataset}
+
+    while len(counted_dataset) != 1:
+        (symbol_1, count_1), (symbol_2, count_2) = counted_dataset[:-3:-1]
+
+        counted_dataset = counted_dataset[:-2]
 
         insort(
-            quantised_dataset,
-            (Huffman_Node(data1, data2), freq_1 + freq_2),
+            counted_dataset,
+            (symbol_1 + symbol_2, count_1 + count_2),
             key=lambda data: -data[1],
         )
-    return quantised_dataset[0][0]
+
+        for sym_1 in symbol_1:
+            codebook[sym_1] += 1
+        for sym_2 in symbol_2:
+            codebook[sym_2] += 1
+
+    code_list = sorted([(bitlength, symbol) for symbol, bitlength in codebook.items()])
+
+    curr_code = -1
+    prev_bitlength = float("inf")
+    canonical_codebook: "OrderedDict[ValidDataType, Huffcode]" = OrderedDict()
+
+    for bitlength, symbol in code_list:
+
+        new_code = curr_code + 1
+        if bitlength > prev_bitlength:
+            new_code = new_code << bitlength - prev_bitlength
+
+        canonical_codebook[symbol] = Huffcode(tobin(new_code, bitlength, dtype), bitlength)
+        prev_bitlength = bitlength
+        curr_code = new_code
+
+    return canonical_codebook, "".join([canonical_codebook[data].bitcode for data in dataset])
 
 
-def build_tree_from_huffmanstring(
-    huffmanString: str, data_size: int, bindecoder: Callable[[BinaryCode], ValidDataType]
-) -> Huffman_Node:
-    """
-    [INTERNAL]
-    rebuild the huffman tree from a bitarray
-
-    Args:
-        huffmanString (str): a string of 0 and 1
-
-        data_size (int): the size of each encoded data, should be the same for all
-
-        bindecoder (Callable): an decoder, complete with all the keyword specification (sign/decimal),
-                               to decode the data from binary string
-                               [using partial from functools to achieve this]
-
-    Returns:
-        Huffman_Node: a huffman tree
-    """
-
-    def traversal_builder(to_process: str) -> Tuple[Huffman_Node, str]:
-        next_bit, to_process = to_process[0], to_process[1:]
-
-        if next_bit == "0":
-            bindata = to_process[:data_size]
-            return bindecoder(data=bindata), to_process[data_size:]
-
-        left_child, to_process = traversal_builder(to_process)
-        right_child, to_process = traversal_builder(to_process)
-        return Huffman_Node(left=left_child, right=right_child), to_process
-
-    try:
-        return traversal_builder(huffmanString)[0]
-    except Exception as err:
-        raise CorruptedHeaderError(f"huffmanstring used is unusable, error occured -> {err}")
-
-
-def generate_catalogue(huffnode: Huffman_Node, tag: BinaryCode = "") -> Dict[BinaryCode, ValidDataType]:
-    """
-    [INTERNAL]
-    generate a dictionary for encoding purposes
-    - key: huffman_code
-    - value: actual data
-
-    Args:
-        huffnode (Huffman_Node): a huffman tree class
-        tag (BinaryCode, optional): a parameter used solely for recursion, no value should be given. Defaults to "".
-
-    Returns:
-        Dict[BinaryCode, ValidDataType]: a catalogue for encoding purposes
-    """
-    if not isinstance(huffnode, Huffman_Node):
-        return {tag: huffnode}
-
-    catalogue = {}
-    catalogue.update(generate_catalogue(huffnode.left, tag + "0"))
-    catalogue.update(generate_catalogue(huffnode.right, tag + "1"))
-
-    return catalogue
+# TODO: a new dump function, with optional dtype indicator, optional codebook parameter
+# ? set every constant as optional arguement -> will have to pass it to each related functions
