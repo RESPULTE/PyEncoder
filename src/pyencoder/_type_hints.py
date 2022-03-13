@@ -3,7 +3,7 @@ from typing import List, TypeVar, NewType
 
 ValidDataType = TypeVar("ValidDataType", str, int, float)
 ValidDataset = TypeVar("ValidDataset", str, List[int], List[float])
-BitCode = NewType("BitCode", str)
+Bitcode = NewType("BitCode", str)
 
 
 class DecodingError(Exception):

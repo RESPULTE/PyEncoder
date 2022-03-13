@@ -1,7 +1,5 @@
-from re import U
-from typing import BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
-from collections import Counter, namedtuple, OrderedDict
-from functools import partial
+from typing import BinaryIO, Dict, List, Tuple, Type, Union
+from collections import Counter, OrderedDict
 from bisect import insort
 
 from bitarray import bitarray
@@ -13,80 +11,55 @@ from pyencoder._type_hints import (
     CorruptedDataError,
     ValidDataType,
     ValidDataset,
-    BitCode,
+    Bitcode,
 )
 from pyencoder.config import (
     ENCODING_MARKER,
     _SUPPORTED_DTYPE_FROM_BIN,
     _SUPPORTED_DTYPE_TO_BIN,
     _ENCODING_MARKER_SIZE,
-    _DECIMAL_MARKER_SIZE,
     _HEADER_MARKER_SIZE,
     _DTYPE_MARKER_SIZE,
-    _ELEM_MARKER_SIZE,
-    _MAX_DECIMAL,
 )
 
 
-Huffcode = namedtuple("Huffcode", ["bitcode", "bitlength"])
+def decode(header: str, encoded_data: str, dtype: ValidDataType) -> ValidDataset:
+    codebook = generate_codebook_from_header(header, dtype)
+    decoded_data = []
 
-'''
+    curr_code = ""
+    for bit in encoded_data:
+        curr_code += bit
+        if curr_code in codebook:
+            decoded_data.append(codebook[curr_code])
+            curr_code = ""
 
-def decode(
-    huffman_string: str, encoded_data: str, data_size: int, dtype: ValidDataType, *, decimal: int = 2
-) -> ValidDataset:
-    """
-    decode the Huffman Coding string into the given data type
+    if dtype == str:
+        decoded_data = "".join(decoded_data)
 
-    Args:
-        huffman_string (str): a binary representation of the huffman tree
+    return decoded_data
 
-        encoded_data (str): a binary encoded data
 
-        data_size (int): the size of each actual data is in the binary representation of the huffman tree
+def generate_codebook_from_header(header: Bitcode, dtype: Type) -> OrderedDict[Bitcode, Union[str, int, float]]:
+    raw_bitlengths, raw_symbols = header[: 8 * 16], header[8 * 16 :]
+    num_symbols = [int(raw_bitlengths[bitlen : bitlen + 8], 2) for bitlen in range(0, len(raw_bitlengths), 8)]
+    symbols = [frombin(raw_symbols[bitlen : bitlen + 8], dtype) for bitlen in range(0, len(raw_symbols), 8)]
 
-        dtype (ValidDataset): data type to decode into
+    codebook = {}
+    curr_code = 0
+    curr_sym_index = 0
 
-        decimal (int, optional): will be used for the float to binary conversion if the datatype given is float. Defaults to 2.
+    for bitlength, num in enumerate(num_symbols, start=1):
 
-    Raises:
-        DecompressionError: if any error occurs during the decoding process
+        for _ in range(num):
+            bincode = tobin(curr_code, bitlength=bitlength, dtype=int)
+            codebook[bincode] = symbols[curr_sym_index]
+            curr_sym_index += 1
+            curr_code += 1
 
-    Returns:
-        ValidDataset: decoded data in the given dataset
-    """
-    bindecoder_config = {
-        str: {"dtype": str},
-        int: {"signed": True, "dtype": int},
-        float: {"decimal": decimal, "signed": True, "dtype": float},
-    }
-    bindecoder = partial(frombin, **bindecoder_config[dtype])
-    huffman_tree = build_tree_from_huffmanstring(huffman_string, data_size, bindecoder)
-    catalogue = generate_catalogue(huffman_tree)
+        curr_code = curr_code << 1
 
-    try:
-        current_node = huffman_tree
-        decoded_data = []
-        curr_tag = ""
-
-        for tag in encoded_data:
-
-            current_node = current_node.left if tag == "0" else current_node.right
-
-            curr_tag += tag
-            if not isinstance(current_node, Huffman_Node):
-                decoded_data.append(catalogue[curr_tag])
-                current_node = huffman_tree
-                curr_tag = ""
-                continue
-
-    except Exception as e:
-        raise CorruptedDataError(f"encoded huffman data is unusable, error occured -> {e}")
-
-    else:
-        return "".join(decoded_data) if dtype == str else decoded_data
-
-'''
+    return codebook
 
 
 def dump(dataset: ValidDataset, file: BinaryIO, marker: ValidDataType = None) -> None:
@@ -107,17 +80,17 @@ def dump(dataset: ValidDataset, file: BinaryIO, marker: ValidDataType = None) ->
                                 if None is given, a random unicode character of my selection will be used instead
 
     """
-    marker = tobin(marker or ENCODING_MARKER)
+    marker = tobin(marker or ENCODING_MARKER, bitlength=16)
 
-    header, encoded_data = encode(dataset)
+    codebook, encoded_data, dtype = encode(dataset)
 
-    header = format(len(header), f"0{_HEADER_MARKER_SIZE}b") + header
+    header = generate_header_from_codebook(codebook, dtype)
 
     # the actual data
     huffman_data = header + encoded_data
 
     # the size of the entire huffmancoding
-    huffmancoding_size = format(len(huffman_data), f"0{_ENCODING_MARKER_SIZE}b")
+    huffmancoding_size = tobin(len(huffman_data), bitlength=_ENCODING_MARKER_SIZE)
 
     datapack = bitarray(marker + huffmancoding_size + huffman_data)
 
@@ -146,54 +119,50 @@ def load(file: BinaryIO, marker: ValidDataType = None) -> ValidDataset:
     encoded_huffdata = bitarray()
     encoded_huffdata.frombytes(file.read())
 
-    _, encoded_huffdata = partition_bitarray(encoded_huffdata, tobin(marker or ENCODING_MARKER))
+    _, encoded_huffdata = partition_bitarray(encoded_huffdata, delimiter=tobin(marker or ENCODING_MARKER, 16))
 
     huffmancoding_size = ba2int(encoded_huffdata[:_ENCODING_MARKER_SIZE])
 
     huffman_data = encoded_huffdata[_ENCODING_MARKER_SIZE : _ENCODING_MARKER_SIZE + huffmancoding_size]
 
-    header_len, huffman_data = partition_bitarray(huffman_data, index=_HEADER_MARKER_SIZE)
+    header_size, huffman_data = ba2int(huffman_data[:_HEADER_MARKER_SIZE]), huffman_data[_HEADER_MARKER_SIZE:]
+    raw_header, encoded_data = huffman_data[:header_size], huffman_data[header_size:]
 
-    header, encoded_data = partition_bitarray(huffman_data, index=ba2int(header_len))
-
-    dtype, huffman_string = partition_bitarray(header, index=_DTYPE_MARKER_SIZE)
-
-    data_size, huffman_string = partition_bitarray(huffman_string, index=_ELEM_MARKER_SIZE)
+    dtype, header = raw_header[:_DTYPE_MARKER_SIZE], raw_header[_DTYPE_MARKER_SIZE:]
 
     data_to_decode = {
-        "huffman_string": huffman_string.to01(),
+        "header": header.to01(),
         "encoded_data": encoded_data.to01(),
-        "data_size": ba2int(data_size),
         "dtype": _SUPPORTED_DTYPE_FROM_BIN[dtype.to01()],
     }
 
-    if data_to_decode["dtype"] == float:
-        decimal, huffman_string = partition_bitarray(huffman_string, index=_DECIMAL_MARKER_SIZE)
-        data_to_decode.update(decimal=ba2int(decimal), huffman_string=huffman_string.to01())
-
-    # return decode(**data_to_decode)
+    return decode(**data_to_decode)
 
 
-def generate_header(canonical_codebook: OrderedDict[Union[str, int, float], Huffcode], dtype: Type = str) -> BitCode:
-    bitlengths: List[BitCode] = ["0" * 8 for _ in range(0, 16 - 1)]
-    symbols: List[BitCode] = []
+def generate_header_from_codebook(codebook: OrderedDict[Union[str, int, float], Bitcode], dtype: Type = str) -> Bitcode:
+    codebook = list(codebook.items()) + [("?", "")]
+    bitlengths: List[Bitcode] = ["0" * 8 for _ in range(0, 16)]
+    symbols: List[Bitcode] = []
 
     curr_code_sum = 0
-    curr_bitlength = 1
-    for symbol, huffcode in canonical_codebook.items():
+    prev_bitlength = 1
+    for symbol, huffcode in codebook:
 
-        if huffcode.bitlength != curr_bitlength:
-            bitlengths[curr_bitlength] = tobin(curr_code_sum)
-            curr_bitlength = huffcode.bitlength
+        symbols.append(tobin(symbol, dtype=dtype))
+
+        curr_bitlength = len(huffcode)
+        if curr_bitlength != prev_bitlength:
+            bitlengths[prev_bitlength - 1] = tobin(data=curr_code_sum, bitlength=8, dtype=int)
+            prev_bitlength = curr_bitlength
             curr_code_sum = 0
 
-        symbols.append(tobin(symbol))
         curr_code_sum += 1
 
-    return "".join(_SUPPORTED_DTYPE_TO_BIN[dtype] + bitlengths + symbols)
+    header = _SUPPORTED_DTYPE_TO_BIN[dtype] + "".join(bitlengths + symbols[:-1])
+    return tobin(len(header), bitlength=_HEADER_MARKER_SIZE) + header
 
 
-def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Huffcode], BitCode]:
+def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Tuple[Bitcode, int]], Bitcode]:
     if isinstance(dataset, str):
         dtype = str
 
@@ -229,23 +198,21 @@ def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Huffcode
         for sym_2 in symbol_2:
             codebook[sym_2] += 1
 
-    code_list = sorted([(bitlength, symbol) for symbol, bitlength in codebook.items()])
-
     curr_code = -1
     prev_bitlength = float("inf")
-    canonical_codebook: "OrderedDict[ValidDataType, Huffcode]" = OrderedDict()
+    canonical_codebook = OrderedDict()
+    code_list = sorted([(bitlength, symbol) for symbol, bitlength in codebook.items()])
 
     for bitlength, symbol in code_list:
 
-        new_code = curr_code + 1
+        curr_code += 1
         if bitlength > prev_bitlength:
-            new_code = new_code << bitlength - prev_bitlength
+            curr_code = curr_code << bitlength - prev_bitlength
 
-        canonical_codebook[symbol] = Huffcode(tobin(new_code, bitlength, dtype), bitlength)
+        canonical_codebook[symbol] = tobin(curr_code, bitlength, int)
         prev_bitlength = bitlength
-        curr_code = new_code
 
-    return canonical_codebook, "".join([canonical_codebook[data].bitcode for data in dataset])
+    return canonical_codebook, "".join([canonical_codebook[data] for data in dataset]), dtype
 
 
 # TODO: a new dump function, with optional dtype indicator, optional codebook parameter

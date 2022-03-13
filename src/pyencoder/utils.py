@@ -5,7 +5,7 @@ from typing import Any, Iterable, List, Literal, NewType, Optional, Tuple, Type,
 
 from numpy import sign
 
-from pyencoder._type_hints import BitCode
+from pyencoder._type_hints import Bitcode
 
 Matrix2D = NewType("Matrix2D", List[List[Any]])
 
@@ -133,7 +133,7 @@ def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return datapacks
 
 
-def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Optional[Type] = None) -> BitCode:
+def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Optional[Type] = None) -> Bitcode:
     """converts the given data into binary string of 0s andd 1s
 
     Args:
@@ -159,12 +159,17 @@ def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Opt
     binlen = len(bindata)
 
     if binlen > bitlength:
-        return bindata.removeprefix("0" * (binlen - bitlength))
+        if not all(x == "0" for x in bindata[:bitlength]):
+            raise ValueError(f"data's bitlength({binlen}) is longer than the given bitlength({bitlength})")
 
-    return bindata.zfill(bitlength)
+        bindata = bindata.removeprefix("0" * (binlen - bitlength))
+    elif binlen < bitlength:
+        bindata = bindata.zfill(bitlength)
+
+    return bindata
 
 
-def frombin(data: BitCode, dtype: Union[int, float, str]) -> Union[int, float, str]:
+def frombin(data: Bitcode, dtype: Union[int, float, str]) -> Union[int, float, str]:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -191,7 +196,7 @@ def frombin(data: BitCode, dtype: Union[int, float, str]) -> Union[int, float, s
     return bin2data_converter[dtype](byte_data)
 
 
-def partition_bitarray(bitstring: bitarray, delimiter: BitCode = None, index: int = None) -> Tuple[bitarray, bitarray]:
+def partition_bitarray(bitstring: bitarray, delimiter: Bitcode = None, index: int = None) -> Tuple[bitarray, bitarray]:
     """a helper function to parition the bitarray into two parts with the given delimeter
 
     Args:
