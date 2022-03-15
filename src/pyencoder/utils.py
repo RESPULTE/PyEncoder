@@ -1,9 +1,9 @@
-import re
+from collections import deque
 import struct
 from bitarray import bitarray
 from typing import Any, Iterable, List, Literal, NewType, Optional, Tuple, Type, Union
 
-from numpy import sign
+from numpy import byte
 
 from pyencoder._type_hints import Bitcode
 
@@ -145,31 +145,44 @@ def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Opt
     Returns:
         BinaryCode: a string of 0 and 1
     """
+    data = [data] if not isinstance(data, list) else data
+    num = len(data)
+
     data2bin_config = {
-        str: lambda x: str.encode(x, "utf-8"),
-        int: lambda x: struct.pack(">h", x),
-        float: lambda x: struct.pack(">f", x),
+        str: lambda x: str.encode("".join(x), "utf-8"),
+        int: lambda x: struct.pack(f">{num}i", *x),
+        float: lambda x: struct.pack(f">{num}f", *x),
     }
 
-    dtype = type(data) if not dtype else dtype
+    dtype = type(data[0])
     if dtype not in data2bin_config.keys():
         raise TypeError(f"data type not supported: '{dtype.__name__}'")
+
+    if not all(isinstance(d, dtype) for d in data):
+        raise ValueError("inconsistent data type")
 
     bindata = "".join("{:08b}".format(b) for b in data2bin_config[dtype](data))
     binlen = len(bindata)
 
-    if binlen > bitlength:
-        if not all(x == "0" for x in bindata[:bitlength]):
-            raise ValueError(f"data's bitlength({binlen}) is longer than the given bitlength({bitlength})")
+    if bitlength == 0:
+        return bindata
 
+    elif bitlength == -1:
+        return bindata.lstrip("0")
+
+    elif binlen > bitlength:
+        actual_binlen = len(bindata.lstrip("0"))
+        if actual_binlen > bitlength:
+            raise ValueError(f"data's bitlength({actual_binlen}) is longer than the given bitlength({bitlength})")
         bindata = bindata.removeprefix("0" * (binlen - bitlength))
+
     elif binlen < bitlength:
         bindata = bindata.zfill(bitlength)
 
     return bindata
 
 
-def frombin(data: Bitcode, dtype: Union[int, float, str]) -> Union[int, float, str]:
+def frombin(data: Bitcode, dtype: Union[int, float, str], num: int = 1) -> Union[int, float, str]:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -184,8 +197,8 @@ def frombin(data: Bitcode, dtype: Union[int, float, str]) -> Union[int, float, s
     """
     bin2data_converter = {
         str: lambda x: bytes.decode(x, "utf8"),
-        int: lambda x: struct.unpack(">h", x)[0],
-        float: lambda x: round(struct.unpack(">f", x)[0], 3),
+        int: lambda x: list(struct.unpack(f">{num}i", x)),
+        float: lambda x: [round(f, 3) for f in struct.unpack(f">{num}f", x)],
     }
 
     if dtype not in bin2data_converter.keys():
@@ -196,23 +209,35 @@ def frombin(data: Bitcode, dtype: Union[int, float, str]) -> Union[int, float, s
     return bin2data_converter[dtype](byte_data)
 
 
-def partition_bitarray(bitstring: bitarray, delimiter: Bitcode = None, index: int = None) -> Tuple[bitarray, bitarray]:
-    """a helper function to parition the bitarray into two parts with the given delimeter
-
-    Args:
-        bitstring (bitarray): an array containning 0 and 1
-        delimiter (BinaryCode): string containning 1 and 0
-
-    Returns:
-        Tuple[bitarray, bitarray]: two part of the seperated bitarray
-    """
-    if (not index and not delimiter) or (index and delimiter):
+def partition_bitarray(
+    bitstring: bitarray,
+    delimiter: Bitcode = None,
+    index: Union[List[int], int] = None,
+    continuous: Optional[bool] = False,
+) -> List[bitarray]:
+    if (index is None and delimiter is None) or (index != None and delimiter != None):
         raise ValueError("either an index or a delimiter is required")
-
-    left_end = right_start = index
 
     if delimiter:
         left_end = bitstring.index(bitarray(delimiter))
         right_start = left_end + len(delimiter)
+        return bitstring[:left_end], bitstring[right_start:]
 
-    return bitstring[:left_end], bitstring[right_start:]
+    if not isinstance(index, list):
+        index = [index]
+
+    to_process = deque(index)
+
+    sections = []
+    prev_index = 0
+    while to_process:
+        curr_index = to_process.popleft()
+        if not continuous:
+            curr_index = curr_index - prev_index
+        sections.append(bitstring[:curr_index])
+        bitstring = bitstring[curr_index:]
+        prev_index = curr_index
+
+    sections.append(bitstring)
+
+    return sections
