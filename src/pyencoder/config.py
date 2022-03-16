@@ -1,14 +1,28 @@
-from typing import Dict, Type
+from enum import Enum
 
-ENCODING_MARKER = "\\"
+# -------------------------------------------ENCODED DATA CONFIGS-------------------------------------------------
+ENCODED_DATA_MARKER_SIZE = 64
 
+# ---------------------------------------------HEADER CONFIGS------------------------------------------------------
+MAX_CODELENGTH = 16
+CODELENGTH_BITSIZE = 8
+HEADER_MARKER_SIZE = 32
 
-_ENCODING_MARKER_SIZE = 32
-_HEADER_MARKER_SIZE = 16
-_DTYPE_MARKER_SIZE = 2
+# ---------------------------------------------DTYPE CONFIGS------------------------------------------------------
+DTYPE_MARKER_SIZE = 8
+SUPPORTED_DTYPE_CODEBOOK: Enum = Enum(
+    "SUPPORTED_DTYPE",
+    [
+        (dtype, format(index, f"0{DTYPE_MARKER_SIZE}b"))
+        for index, dtype in enumerate(["h", "i", "l", "q", "f", "d", "s"])
+    ],
+)
 
-_MAX_CODELENGTH = 16
-_CODELENGTH_BITSIZE = 8
+# ----------------------------------------------MISC CONFIGS-------------------------------------------------------
+ENDIAN = "big"
+ENDIAN_SYMBOL = ">" if ENDIAN == "big" else "<"
 
-_SUPPORTED_DTYPE_TO_BIN: Dict[Type, str] = {str: "01", int: "10", float: "11"}
-_SUPPORTED_DTYPE_FROM_BIN: Dict[str, Type] = {"01": str, "10": int, "11": float}
+MARKER = "\\"
+MARKER_DTYPE = "s" if isinstance(MARKER, str) else "i"
+
+STRING_ENCODING_FORMAT = "utf-8"

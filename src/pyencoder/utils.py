@@ -1,11 +1,10 @@
-from collections import deque
 import struct
 from bitarray import bitarray
+from collections import deque
 from typing import Any, Iterable, List, Literal, NewType, Optional, Tuple, Type, Union
 
-from numpy import byte
-
-from pyencoder._type_hints import Bitcode
+from pyencoder.type_hints import Bitcode, ValidDataset, SupportedDataType
+from pyencoder.config import ENDIAN, ENDIAN_SYMBOL, STRING_ENCODING_FORMAT
 
 Matrix2D = NewType("Matrix2D", List[List[Any]])
 
@@ -133,35 +132,17 @@ def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return datapacks
 
 
-def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Optional[Type] = None) -> Bitcode:
-    """converts the given data into binary string of 0s andd 1s
+def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = 0) -> Bitcode:
+    if dtype == "s":
+        if isinstance(data, list):
+            data = "".join(data)
+        byte_data = str.encode(data, STRING_ENCODING_FORMAT)
+    else:
+        if not isinstance(data, Iterable):
+            data = [data]
+        byte_data = struct.pack("%s%s%s" % (ENDIAN_SYMBOL, len(data), dtype), *data)
 
-    Args:
-        data (Union[int, float, str]): integer, floats and strings are the only accepted data types
-
-    Raises:
-        TypeError: if the given data is not of the integer, floats or strings data type
-
-    Returns:
-        BinaryCode: a string of 0 and 1
-    """
-    data = [data] if not isinstance(data, list) else data
-    num = len(data)
-
-    data2bin_config = {
-        str: lambda x: str.encode("".join(x), "utf-8"),
-        int: lambda x: struct.pack(f">{num}i", *x),
-        float: lambda x: struct.pack(f">{num}f", *x),
-    }
-
-    dtype = type(data[0])
-    if dtype not in data2bin_config.keys():
-        raise TypeError(f"data type not supported: '{dtype.__name__}'")
-
-    if not all(isinstance(d, dtype) for d in data):
-        raise ValueError("inconsistent data type")
-
-    bindata = "".join("{:08b}".format(b) for b in data2bin_config[dtype](data))
+    bindata = "".join("{:08b}".format(b) for b in byte_data)
     binlen = len(bindata)
 
     if bitlength == 0:
@@ -182,7 +163,7 @@ def tobin(data: Union[int, float, str], bitlength: Optional[int] = 0, dtype: Opt
     return bindata
 
 
-def frombin(data: Bitcode, dtype: Union[int, float, str], num: int = 1) -> Union[int, float, str]:
+def frombin(data: Bitcode, dtype: SupportedDataType, num: int) -> ValidDataset:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -195,18 +176,16 @@ def frombin(data: Bitcode, dtype: Union[int, float, str], num: int = 1) -> Union
     Returns:
         Union[int, float, str]: converted data
     """
-    bin2data_converter = {
-        str: lambda x: bytes.decode(x, "utf8"),
-        int: lambda x: list(struct.unpack(f">{num}i", x)),
-        float: lambda x: [round(f, 3) for f in struct.unpack(f">{num}f", x)],
-    }
+    byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder=ENDIAN)
 
-    if dtype not in bin2data_converter.keys():
-        raise TypeError(f"data type not supported: '{dtype.__name__}'")
+    if dtype == "s":
+        decoded_data = "".join(bytes.decode(byte_data, STRING_ENCODING_FORMAT))
+    else:
+        decoded_data = list(struct.unpack("%s%s%s" % (ENDIAN_SYMBOL, num, dtype), byte_data))
+        if dtype == "f":
+            decoded_data = [round(f, 5) for f in decoded_data]
 
-    byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder="big")
-
-    return bin2data_converter[dtype](byte_data)
+    return decoded_data
 
 
 def partition_bitarray(
@@ -223,11 +202,11 @@ def partition_bitarray(
         right_start = left_end + len(delimiter)
         return bitstring[:left_end], bitstring[right_start:]
 
-    if not isinstance(index, list):
-        index = [index]
+    if not isinstance(index, Iterable):
+        return bitstring[:index], bitstring[index:]
 
     to_process = deque(index)
-
+    # add comment later i forgorr what this thing does
     sections = []
     prev_index = 0
     while to_process:
@@ -241,3 +220,6 @@ def partition_bitarray(
     sections.append(bitstring)
 
     return sections
+
+
+# TODO: ADD MORE DATA TYPE TO THE "tobin" & "frombin" functions
