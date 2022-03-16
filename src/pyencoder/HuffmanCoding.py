@@ -15,6 +15,7 @@ from pyencoder.type_hints import (
 from pyencoder.config import (
     MARKER,
     MARKER_DTYPE,
+    MARKER_SIZE,
     MAX_CODELENGTH,
     CODELENGTH_BITSIZE,
     SUPPORTED_DTYPE_CODEBOOK,
@@ -74,9 +75,9 @@ def dump(
     dtype: SupportedDataType,
     *,
     marker: ValidDataType = MARKER,
-    marker_len: int = 16
+    marker_size: int = MARKER_SIZE
 ) -> None:
-    marker = tobin(marker, bitlength=marker_len, dtype=MARKER_DTYPE)
+    marker = tobin(marker, bitlength=marker_size, dtype=MARKER_DTYPE)
 
     codebook, encoded_data = encode(dataset)
     header = generate_header_from_codebook(codebook, dtype)
@@ -85,11 +86,11 @@ def dump(
     datapack.tofile(file)
 
 
-def load(file: BinaryIO, marker: ValidDataType = MARKER, marker_len: int = 16) -> ValidDataset:
+def load(file: BinaryIO, marker: ValidDataType = MARKER, marker_size: int = MARKER_SIZE) -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
-    bin_marker = tobin(marker, bitlength=marker_len, dtype=MARKER_DTYPE)
+    bin_marker = tobin(marker, bitlength=marker_size, dtype=MARKER_DTYPE)
     _, raw_bindata = partition_bitarray(raw_bindata, delimiter=bin_marker)
 
     header_size, huffman_data = partition_bitarray(raw_bindata, index=[HEADER_MARKER_SIZE])
@@ -180,10 +181,10 @@ def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Tuple[Bi
     return canonical_codebook, encoding
 
 
-s = "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
-s = [1, 2, 3, 4, 5]
-with open("f", "wb") as f:
-    dump(s, f, "h")
+# s = "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
+# s = [1, 2, 3, 4, 5]
+# with open("f", "wb") as f:
+#     dump(s, f, "h")
 
-with open("f", "rb") as f:
-    print(load(f) == s)
+# with open("f", "rb") as f:
+#     print(load(f) == s)

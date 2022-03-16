@@ -1,5 +1,10 @@
 from enum import Enum
 
+# -----------------------------------------------MARKER CONFIGS--------------------------------------------------
+MARKER = "\\"
+MARKER_SIZE = 8
+MARKER_DTYPE = "s" if isinstance(MARKER, str) else "i"
+
 # -------------------------------------------ENCODED DATA CONFIGS-------------------------------------------------
 ENCODED_DATA_MARKER_SIZE = 64
 
@@ -21,8 +26,5 @@ SUPPORTED_DTYPE_CODEBOOK: Enum = Enum(
 # ----------------------------------------------MISC CONFIGS-------------------------------------------------------
 ENDIAN = "big"
 ENDIAN_SYMBOL = ">" if ENDIAN == "big" else "<"
-
-MARKER = "\\"
-MARKER_DTYPE = "s" if isinstance(MARKER, str) else "i"
 
 STRING_ENCODING_FORMAT = "utf-8"
