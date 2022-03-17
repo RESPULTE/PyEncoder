@@ -21,5 +21,5 @@ class CorruptedHeaderError(Exception):
     pass
 
 
-class CorruptedDataError(Exception):
+class CorruptedEncodingError(Exception):
     pass
