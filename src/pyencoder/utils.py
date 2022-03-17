@@ -1,76 +1,56 @@
 import struct
-from bitarray import bitarray
 from collections import deque
+from bitarray import bitarray
+from functools import lru_cache
 from typing import List, Iterable, Literal, NewType, Optional, Tuple, TypeVar, Union, overload
 
-from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
 from pyencoder import config
+from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
 
 T = TypeVar("T")
 Matrix2D = NewType("Matrix2D", List[List[T]])
 
 
 @overload
-def zigzag(dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: bool = False) -> List[T]:
+def zigzag(dataset: Matrix2D, runtype: Literal["d", "h", "v"]) -> List[T]:
     ...
 
 
 @overload
-def zigzag(dataset: List[T], runtype: Literal["d", "h", "v"], inverse: bool = True) -> Matrix2D:
+def zigzag(dataset: List[T], runtype: Literal["d", "h", "v"], row: int, col: int) -> Matrix2D:
     ...
 
 
 def zigzag(
-    dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: Optional[bool] = False
-) -> Union[List[List[T]], List[T]]:
-    """generates a 1D array from a 2D array with the given runtype in a zig-zaggy fashion
-
-    Args:
-        dataset (Matrix2D): a 2D matrix which is a list made up of lists (nested list),
-                            that is symmetrical in its rows & columns
-
-        runtype (Literal['d', 'h', 'v']): traverses the given 2D matrix in the given runtype
-                                          'd' (diagonal): - traverse in a sideway Z pattern
-                                          'h' (horizontal): - traverse in a 'normal' Z pattern
-                                          'v' (vertical): - traverse in a N pattern
-
-        inverse (bool, optional): recreates a 1D dataset into 2D array in a zig zaggy fashion. Defaults to False.
-
-    Raises:
-        ValueError: if inverse is True, but the given dataset is not an iterable list
-        ValueError: if the element in the 2D dataset is not iterables, i.e not a nested list
-        ValueError: if the given 2D dataset is not symmetrical
-
-    Returns:
-        List[Any]: if the inverse is False
-        List[List[Any]]: if the inverse is True
-    """
-    if inverse and not isinstance(dataset, Iterable):
-        raise ValueError("dataset must a 1D/non-nested iterable")
-
-    if not inverse:
-        if not all(isinstance(data, Iterable) for data in dataset):
-            raise ValueError("dataset must a 2D/nested iterable")
-        if sum(len(row) for row in dataset) % len(dataset[0]) != 0:
-            raise ValueError(
-                "Invalid dataset: dataset must be symmetrical, each row must have the same number of columns"
-            )
+    dataset: Union[Matrix2D, List[T]], runtype: Literal["d", "h", "v"], row: int = -1, col: int = -1
+) -> Union[Matrix2D, List[T]]:
+    if all(isinstance(data, Iterable) for data in dataset):
+        row, col = len(dataset), len(dataset[0])
+        inverse = False
+    else:
+        dataset_size = len(dataset)
+        if row * col != dataset_size:
+            raise ValueError(f"cannot form {row}x{col} matrix with datset of size '{dataset_size}'")
+        inverse = True
 
     valid_runtypes = {"d": generate_dzigzag_index, "h": generate_hzigzag_index, "v": generate_vzigzag_index}
-    row, col = len(dataset), len(dataset[0])
     index_list = valid_runtypes[runtype](row, col)
 
     if not inverse:
-        return [dataset[i][j] for (i, j) in index_list]
+        try:
+            return [dataset[i][j] for (i, j) in index_list]
+        except IndexError:
+            raise ValueError("dataset is not symmetrical, row & column does not match")
 
-    matrix_2D = [[None for _ in range(col)] for _ in range(row)]
+    matrix = [[None for _ in range(col)] for _ in range(row)]
 
     for index, (i, j) in enumerate(index_list):
-        matrix_2D[i][j] = dataset[index]
+        matrix[i][j] = dataset[index]
 
-    return matrix_2D
+    return matrix
 
 
+@lru_cache
 def generate_dzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     """generate all the required indexes to turn a 2D array
        into a 1D array in a zig-zaggy fashion in a shape of a sideway Z
@@ -95,6 +75,7 @@ def generate_dzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return [(i, j) for coor in index_list for (i, j) in coor]
 
 
+@lru_cache
 def generate_vzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     """generate all the required indexes to turn a 2D array
        into a 1D array in a zig-zaggy fashion in a shape of the 'N' letter
@@ -119,6 +100,7 @@ def generate_vzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return datapacks
 
 
+@lru_cache
 def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     """generate all the required indexes to turn a 2D array
        into a 1D array in a zig-zaggy fashion in a shape of the 'Z' letter
@@ -151,7 +133,7 @@ def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int]
     else:
         if not isinstance(data, Iterable):
             data = [data]
-        byte_data = struct.pack("%s%s%s" % (config.ENDIAN_SYMBOL, len(data), dtype), *data)
+        byte_data = struct.pack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", len(data), dtype), *data)
 
     bindata = "".join("{:08b}".format(b) for b in byte_data)
     binlen = len(bindata)
@@ -192,7 +174,7 @@ def frombin(data: Bitcode, dtype: SupportedDataType, num: int) -> ValidDataset:
     if dtype == "s":
         decoded_data = "".join(bytes.decode(byte_data, config.STRING_ENCODING_FORMAT))
     else:
-        decoded_data = list(struct.unpack("%s%s%s" % (config.ENDIAN_SYMBOL, num, dtype), byte_data))
+        decoded_data = list(struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, dtype), byte_data))
         if dtype == "f":
             decoded_data = [round(f, 5) for f in decoded_data]
 
