@@ -1,6 +1,7 @@
 from bisect import insort
 from collections import Counter
 from typing import BinaryIO, Dict, Tuple, Type
+from wsgiref import headers
 
 from bitarray import bitarray
 from bitarray.util import ba2int
@@ -17,6 +18,7 @@ from pyencoder.type_hints import (
 
 def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> ValidDataset:
     codebook = generate_codebook_from_header(header, dtype)
+
     decoded_data = []
 
     curr_code = ""
@@ -59,43 +61,35 @@ def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> 
     return codebook
 
 
-def dump(
-    dataset: ValidDataset,
-    file: BinaryIO,
-    dtype: SupportedDataType,
-    *,
-    marker: ValidDataType = config.MARKER,
-    marker_size: int = config.MARKER_SIZE
-) -> None:
-    marker = tobin(marker, bitlength=marker_size, dtype=config.MARKER_DTYPE)
+def dump(dataset: ValidDataset, dtype: SupportedDataType, file: BinaryIO) -> None:
+    marker = tobin(config.MARKER, bitlength=config.MARKER_SIZE, dtype=config.MARKER_DTYPE)
 
     codebook, encoded_data = encode(dataset)
     encoded_datasize = tobin(len(encoded_data), bitlength=config.ENCODED_DATA_MARKER_SIZE, dtype="i")
 
     header = generate_header_from_codebook(codebook, dtype)
-    header_size = tobin(len(header), bitlength=config.HEADER_MARKER_SIZE, dtype="i")
+    header_size = tobin(len(header) - config.DTYPE_MARKER_SIZE, bitlength=config.HEADER_MARKER_SIZE, dtype="i")
 
     datapack = bitarray(marker + header_size + header + encoded_datasize + encoded_data)
+
     datapack.tofile(file)
+    return datapack
 
 
-def load(
-    file: BinaryIO, *, marker: ValidDataType = config.MARKER, marker_size: int = config.MARKER_SIZE
-) -> ValidDataset:
+def load(file: BinaryIO) -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
-    bin_marker = tobin(marker, bitlength=marker_size, dtype=config.MARKER_DTYPE)
-    _, raw_bindata = partition_bitarray(raw_bindata, delimiter=bin_marker)
+    marker = tobin(config.MARKER, bitlength=config.MARKER_SIZE, dtype=config.MARKER_DTYPE)
+    _, raw_bindata = partition_bitarray(raw_bindata, delimiter=marker)
 
-    header_size, huffman_data = partition_bitarray(raw_bindata, index=[config.HEADER_MARKER_SIZE])
+    header_size, huffman_data = partition_bitarray(raw_bindata, index=config.HEADER_MARKER_SIZE)
 
     dtype, header, encoding_size, encoded_data = partition_bitarray(
         huffman_data,
         index=[config.DTYPE_MARKER_SIZE, ba2int(header_size), config.ENCODED_DATA_MARKER_SIZE],
         continuous=True,
     )
-
     data_to_decode = {
         "header": header.to01(),
         "encoded_data": encoded_data[: ba2int(encoding_size)].to01(),
@@ -180,13 +174,13 @@ def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, in
 #     s = "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
 
 #     with open("f", "wb") as f:
-#         dump(s, f, "s")
+#         dump(s, "s", f)
 
 #     with open("f", "rb") as f:
 #         print(load(f) == s)
 
-#     with open("t", "w") as f:
-#         f.write(s)
+#     # with open("t", "w") as f:
+#     #     f.write(s)
 
 
 # cProfile.run("main()", sort="tottime")
