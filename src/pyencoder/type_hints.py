@@ -1,12 +1,12 @@
-from typing import List, Literal, TypeVar, NewType
+from typing import List, NewType, Union
 
-from pyencoder.config import SUPPORTED_DTYPE_CODEBOOK
+from pyencoder.config import SUPPORTED_DTYPE
 
-ValidDataType = TypeVar("ValidDataType", str, int, float)
-ValidDataset = TypeVar("ValidDataset", str, List[int], List[float])
+ValidDataType = Union[str, int, float]
+ValidDataset = Union[str, List[int], List[float]]
 Bitcode = NewType("BitCode", str)
 
-SupportedDataType = Literal[tuple([dtype.name for dtype in SUPPORTED_DTYPE_CODEBOOK])]  # type: ignore
+SupportedDataType = SUPPORTED_DTYPE
 
 
 class DecodingError(Exception):

@@ -1,17 +1,28 @@
 import struct
 from bitarray import bitarray
 from collections import deque
-from typing import Any, Iterable, List, Literal, NewType, Optional, Tuple, Type, Union
+from typing import List, Iterable, Literal, NewType, Optional, Tuple, TypeVar, Union, overload
 
-from pyencoder.type_hints import Bitcode, ValidDataset, SupportedDataType
-from pyencoder.config import ENDIAN, ENDIAN_SYMBOL, STRING_ENCODING_FORMAT
+from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
+from pyencoder import config
 
-Matrix2D = NewType("Matrix2D", List[List[Any]])
+T = TypeVar("T")
+Matrix2D = NewType("Matrix2D", List[List[T]])
+
+
+@overload
+def zigzag(dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: bool = False) -> List[T]:
+    ...
+
+
+@overload
+def zigzag(dataset: List[T], runtype: Literal["d", "h", "v"], inverse: bool = True) -> Matrix2D:
+    ...
 
 
 def zigzag(
     dataset: Matrix2D, runtype: Literal["d", "h", "v"], inverse: Optional[bool] = False
-) -> Union[List[List[Any]], List[Any]]:
+) -> Union[List[List[T]], List[T]]:
     """generates a 1D array from a 2D array with the given runtype in a zig-zaggy fashion
 
     Args:
@@ -136,11 +147,11 @@ def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int]
     if dtype == "s":
         if isinstance(data, list):
             data = "".join(data)
-        byte_data = str.encode(data, STRING_ENCODING_FORMAT)
+        byte_data = str.encode(data, config.STRING_ENCODING_FORMAT)
     else:
         if not isinstance(data, Iterable):
             data = [data]
-        byte_data = struct.pack("%s%s%s" % (ENDIAN_SYMBOL, len(data), dtype), *data)
+        byte_data = struct.pack("%s%s%s" % (config.ENDIAN_SYMBOL, len(data), dtype), *data)
 
     bindata = "".join("{:08b}".format(b) for b in byte_data)
     binlen = len(bindata)
@@ -176,34 +187,53 @@ def frombin(data: Bitcode, dtype: SupportedDataType, num: int) -> ValidDataset:
     Returns:
         Union[int, float, str]: converted data
     """
-    byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder=ENDIAN)
+    byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder=config.ENDIAN)
 
     if dtype == "s":
-        decoded_data = "".join(bytes.decode(byte_data, STRING_ENCODING_FORMAT))
+        decoded_data = "".join(bytes.decode(byte_data, config.STRING_ENCODING_FORMAT))
     else:
-        decoded_data = list(struct.unpack("%s%s%s" % (ENDIAN_SYMBOL, num, dtype), byte_data))
+        decoded_data = list(struct.unpack("%s%s%s" % (config.ENDIAN_SYMBOL, num, dtype), byte_data))
         if dtype == "f":
             decoded_data = [round(f, 5) for f in decoded_data]
 
     return decoded_data
 
 
+@overload
+def partition_bitarray(bitarray_: bitarray, delimiter: ValidDataType):
+    ...
+
+
+@overload
+def partition_bitarray(bitarray_: bitarray, index: int):
+    ...
+
+
+@overload
+def partition_bitarray(bitarray_: bitarray, index: List[int], continous: Optional[bool] = False):
+    ...
+
+
 def partition_bitarray(
-    bitstring: bitarray,
+    bitarray_: bitarray,
     delimiter: Bitcode = None,
     index: Union[List[int], int] = None,
     continuous: Optional[bool] = False,
 ) -> List[bitarray]:
-    if (index is None and delimiter is None) or (index != None and delimiter != None):
+    if (
+        (index is None and delimiter is None)
+        or (index != None and delimiter != None)
+        or (delimiter != None and continuous)
+    ):
         raise ValueError("either an index or a delimiter is required")
 
     if delimiter:
-        left_end = bitstring.index(bitarray(delimiter))
+        left_end = bitarray_.index(bitarray(delimiter))
         right_start = left_end + len(delimiter)
-        return bitstring[:left_end], bitstring[right_start:]
+        return bitarray_[:left_end], bitarray_[right_start:]
 
     if not isinstance(index, Iterable):
-        return bitstring[:index], bitstring[index:]
+        return bitarray_[:index], bitarray_[index:]
 
     to_process = deque(index)
     # add comment later i forgorr what this thing does
@@ -213,13 +243,10 @@ def partition_bitarray(
         curr_index = to_process.popleft()
         if not continuous:
             curr_index = curr_index - prev_index
-        sections.append(bitstring[:curr_index])
-        bitstring = bitstring[curr_index:]
+        sections.append(bitarray_[:curr_index])
+        bitarray_ = bitarray_[curr_index:]
         prev_index = curr_index
 
-    sections.append(bitstring)
+    sections.append(bitarray_)
 
     return sections
-
-
-# TODO: ADD MORE DATA TYPE TO THE "tobin" & "frombin" functions

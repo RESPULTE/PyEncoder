@@ -1,7 +1,9 @@
-from typing import Union, Any, List, Tuple
+from typing import Any, List, Tuple, overload
+
+from pyencoder.type_hints import ValidDataset
 
 
-def encode(dataset: Union[str, list, tuple]) -> List[Tuple[Any, int]]:
+def encode(dataset: ValidDataset) -> List[Tuple[Any, int]]:
     dataset_size = len(dataset)
     encoded_data = []
     curr_index = 0

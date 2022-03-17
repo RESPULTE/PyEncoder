@@ -1,10 +1,11 @@
 from bisect import insort
 from collections import Counter
-from typing import BinaryIO, Dict, Tuple, Type, Union
+from typing import BinaryIO, Dict, Tuple, Type
 
 from bitarray import bitarray
 from bitarray.util import ba2int
 
+from pyencoder import config
 from pyencoder.utils import frombin, tobin, partition_bitarray
 from pyencoder.type_hints import (
     SupportedDataType,
@@ -12,20 +13,9 @@ from pyencoder.type_hints import (
     ValidDataset,
     Bitcode,
 )
-from pyencoder.config import (
-    MARKER,
-    MARKER_DTYPE,
-    MARKER_SIZE,
-    MAX_CODELENGTH,
-    CODELENGTH_BITSIZE,
-    SUPPORTED_DTYPE_CODEBOOK,
-    ENCODED_DATA_MARKER_SIZE,
-    HEADER_MARKER_SIZE,
-    DTYPE_MARKER_SIZE,
-)
 
 
-def decode(header: str, encoded_data: str, dtype: ValidDataType) -> ValidDataset:
+def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> ValidDataset:
     codebook = generate_codebook_from_header(header, dtype)
     decoded_data = []
 
@@ -42,13 +32,13 @@ def decode(header: str, encoded_data: str, dtype: ValidDataType) -> ValidDataset
     return decoded_data
 
 
-def generate_codebook_from_header(header: Bitcode, dtype: Type) -> Dict[Bitcode, Union[str, int, float]]:
-    codelength_info = CODELENGTH_BITSIZE * MAX_CODELENGTH
+def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidDataType]:
+    codelength_info = config.CODELENGTH_BITSIZE * config.MAX_CODELENGTH
     bin_codelengths, bin_symbols = header[:codelength_info], header[codelength_info:]
 
     num_symbols = [
-        int(bin_codelengths[bitlen : bitlen + CODELENGTH_BITSIZE], 2)
-        for bitlen in range(0, len(bin_codelengths), CODELENGTH_BITSIZE)
+        int(bin_codelengths[bitlen : bitlen + config.CODELENGTH_BITSIZE], 2)
+        for bitlen in range(0, len(bin_codelengths), config.CODELENGTH_BITSIZE)
     ]
     symbols = frombin(data=bin_symbols, dtype=dtype, num=sum(num_symbols))
 
@@ -74,42 +64,49 @@ def dump(
     file: BinaryIO,
     dtype: SupportedDataType,
     *,
-    marker: ValidDataType = MARKER,
-    marker_size: int = MARKER_SIZE
+    marker: ValidDataType = config.MARKER,
+    marker_size: int = config.MARKER_SIZE
 ) -> None:
-    marker = tobin(marker, bitlength=marker_size, dtype=MARKER_DTYPE)
+    marker = tobin(marker, bitlength=marker_size, dtype=config.MARKER_DTYPE)
 
     codebook, encoded_data = encode(dataset)
-    header = generate_header_from_codebook(codebook, dtype)
+    encoded_datasize = tobin(len(encoded_data), bitlength=config.ENCODED_DATA_MARKER_SIZE, dtype="i")
 
-    datapack = bitarray(marker + header + encoded_data)
+    header = generate_header_from_codebook(codebook, dtype)
+    header_size = tobin(len(header), bitlength=config.HEADER_MARKER_SIZE, dtype="i")
+
+    datapack = bitarray(marker + header_size + header + encoded_datasize + encoded_data)
     datapack.tofile(file)
 
 
-def load(file: BinaryIO, marker: ValidDataType = MARKER, marker_size: int = MARKER_SIZE) -> ValidDataset:
+def load(
+    file: BinaryIO, *, marker: ValidDataType = config.MARKER, marker_size: int = config.MARKER_SIZE
+) -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
-    bin_marker = tobin(marker, bitlength=marker_size, dtype=MARKER_DTYPE)
+    bin_marker = tobin(marker, bitlength=marker_size, dtype=config.MARKER_DTYPE)
     _, raw_bindata = partition_bitarray(raw_bindata, delimiter=bin_marker)
 
-    header_size, huffman_data = partition_bitarray(raw_bindata, index=[HEADER_MARKER_SIZE])
+    header_size, huffman_data = partition_bitarray(raw_bindata, index=[config.HEADER_MARKER_SIZE])
 
     dtype, header, encoding_size, encoded_data = partition_bitarray(
-        huffman_data, index=[DTYPE_MARKER_SIZE, ba2int(header_size), ENCODED_DATA_MARKER_SIZE], continuous=True
+        huffman_data,
+        index=[config.DTYPE_MARKER_SIZE, ba2int(header_size), config.ENCODED_DATA_MARKER_SIZE],
+        continuous=True,
     )
 
     data_to_decode = {
         "header": header.to01(),
         "encoded_data": encoded_data[: ba2int(encoding_size)].to01(),
-        "dtype": SUPPORTED_DTYPE_CODEBOOK(dtype.to01()).name,
+        "dtype": config.SUPPORTED_DTYPE_CODEBOOK(dtype.to01()).name,
     }
 
     return decode(**data_to_decode)
 
 
-def generate_header_from_codebook(codebook: Dict[Union[str, int, float], Bitcode], dtype: Type = str) -> Bitcode:
-    codelengths = ["0" * CODELENGTH_BITSIZE for _ in range(0, MAX_CODELENGTH)]
+def generate_header_from_codebook(codebook: Dict[ValidDataType, Bitcode], dtype: Type = str) -> Bitcode:
+    codelengths = ["0" * config.CODELENGTH_BITSIZE for _ in range(0, config.MAX_CODELENGTH)]
     counted_codelengths = Counter([len(code) for code in codebook.values()])
 
     for length, count in counted_codelengths.items():
@@ -117,12 +114,11 @@ def generate_header_from_codebook(codebook: Dict[Union[str, int, float], Bitcode
 
     symbols = tobin(list(codebook.keys()), dtype=dtype)
     header = "".join(codelengths) + symbols
-    header_size = tobin(len(header), bitlength=HEADER_MARKER_SIZE, dtype="i")
 
-    return header_size + SUPPORTED_DTYPE_CODEBOOK[dtype].value + header
+    return config.SUPPORTED_DTYPE_CODEBOOK[dtype].value + header
 
 
-def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Tuple[Bitcode, int]], Bitcode]:
+def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, int]], Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     to_process = [([[symbol], count]) for symbol, count in Counter(dataset).most_common()]
     codebook = {symbol[0]: 0 for symbol, _ in to_process}
@@ -174,17 +170,23 @@ def encode(dataset: ValidDataset) -> Tuple[Dict[Union[str, int, float], Tuple[Bi
     encoded_data = "".join([canonical_codebook[data] for data in dataset])
 
     # marker to indicate the size of the encoded data
-    encoded_data_size = tobin(len(encoded_data), bitlength=ENCODED_DATA_MARKER_SIZE, dtype="i")
-
-    encoding = encoded_data_size + encoded_data
-
-    return canonical_codebook, encoding
+    return canonical_codebook, encoded_data
 
 
-# s = "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
-# s = [1, 2, 3, 4, 5]
-# with open("f", "wb") as f:
-#     dump(s, f, "h")
+# import cProfile
 
-# with open("f", "rb") as f:
-#     print(load(f) == s)
+
+# def main():
+#     s = "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum."
+
+#     with open("f", "wb") as f:
+#         dump(s, f, "s")
+
+#     with open("f", "rb") as f:
+#         print(load(f) == s)
+
+#     with open("t", "w") as f:
+#         f.write(s)
+
+
+# cProfile.run("main()", sort="tottime")
