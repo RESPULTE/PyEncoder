@@ -17,15 +17,16 @@ def encode(dataset: ValidDataset, target_values: Sequence[Any] = None) -> List[T
             curr_index += 1
             count += 1
 
-        if target_values is not None and curr_elem in target_values:
-            encoded_data.append((curr_elem, count))
-            continue
+        data_to_extend = [curr_elem, count]
+        if target_values is not None and curr_elem not in target_values:
+            data_to_extend = [curr_elem] * count
 
-        encoded_data.extend([curr_elem] * count)
+        encoded_data.extend(data_to_extend)
 
     return encoded_data
 
 
+# a bit stupid
 def decode(encoded_data: List[Tuple[Any, int]]) -> List[Tuple[Any, int]]:
     decoded_data = []
 

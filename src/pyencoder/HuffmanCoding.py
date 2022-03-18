@@ -1,4 +1,4 @@
-from bisect import insort
+from bisect import insort_left
 from collections import Counter
 from typing import BinaryIO, Dict, Optional, Tuple, Type
 
@@ -83,22 +83,24 @@ def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> 
 def dump(
     dataset: ValidDataset,
     dtype: SupportedDataType,
-    file: BinaryIO,
+    file: Optional[BinaryIO] = None,
     *,
     dtype_marker: bool = True,
 ) -> None:
     codebook, encoded_data = encode(dataset)
-    encoded_datasize = tobin(len(encoded_data), bitlength=config.ENCODED_DATA_MARKER_BITSIZE, dtype="i")
-
     header = generate_header_from_codebook(codebook, dtype)
-    header_size = tobin(len(header), bitlength=config.HEADER_MARKER_BITSIZE, dtype="i")
 
-    dtype_marker_ = config.SUPPORTED_DTYPE_CODEBOOK[dtype].value if dtype_marker else ""
     marker_dtype = "s" if isinstance(config.MARKER, str) else "i"
     marker = tobin(config.MARKER, bitlength=config.MARKER_BITSIZE, dtype=marker_dtype)
 
-    datapack = bitarray(marker + dtype_marker_ + header_size + header + encoded_datasize + encoded_data)
-    datapack.tofile(file)
+    dtype_marker_ = config.SUPPORTED_DTYPE_CODEBOOK[dtype].value if dtype_marker else ""
+
+    datapack = bitarray(marker + dtype_marker_ + header + encoded_data)
+
+    if file is not None:
+        datapack.tofile(file)
+    else:
+        return datapack.to01()
 
 
 def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDataset:
@@ -143,17 +145,16 @@ def generate_header_from_codebook(codebook: Dict[ValidDataType, Bitcode], dtype:
     counted_codelengths = Counter([len(code) for code in codebook.values()])
 
     for length, count in counted_codelengths.items():
-        codelengths[length - 1] = tobin(data=count, bitlength=8, dtype="h")
+        codelengths[length - 1] = tobin(data=count, bitlength=config.CODELENGTH_BITSIZE, dtype="h")
 
     symbols = tobin(list(codebook.keys()), dtype=dtype)
     header = "".join(codelengths) + symbols
+    header_size = tobin(len(header), bitlength=config.HEADER_MARKER_BITSIZE, dtype="i")
 
-    return header
+    return header_size + header
 
 
-def encode(
-    dataset: ValidDataset, codebook: Optional[Dict[ValidDataType, Bitcode]] = None
-) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, int]], Bitcode]:
+def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, int]], Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     to_process = [([[symbol], count]) for symbol, count in Counter(dataset).most_common()]
     codebook = {symbol[0]: 0 for symbol, _ in to_process}
@@ -167,7 +168,7 @@ def encode(
         # insert the newly formed subtree back into the list
         # PS: not so sure why i added the sort key with a negative for its frequency
         #     but the entire process fails without it so.... yeea :/
-        insort(
+        insort_left(
             to_process,
             (symbol_1 + symbol_2, count_1 + count_2),
             key=lambda data: -data[1],
@@ -198,11 +199,12 @@ def encode(
         if bitlength > prev_bitlength:
             curr_code = curr_code << bitlength - prev_bitlength
 
-        canonical_codebook[symbol] = tobin(curr_code, bitlength=bitlength, dtype="h")
+        canonical_codebook[symbol] = tobin(curr_code, bitlength=bitlength, dtype="i")
         prev_bitlength = bitlength
 
     # the actual encoding process for the data
     encoded_data = "".join([canonical_codebook[data] for data in dataset])
+    encoded_datasize = tobin(len(encoded_data), bitlength=config.ENCODED_DATA_MARKER_BITSIZE, dtype="i")
 
     # marker to indicate the size of the encoded data
-    return canonical_codebook, encoded_data
+    return canonical_codebook, encoded_datasize + encoded_data
