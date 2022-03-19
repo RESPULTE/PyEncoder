@@ -1,6 +1,6 @@
 from bisect import insort_left
 from collections import Counter
-from typing import BinaryIO, Dict, Optional, Tuple, Type
+from typing import BinaryIO, Dict, Optional, Tuple
 
 from bitarray import bitarray
 from bitarray.util import ba2int
@@ -88,29 +88,30 @@ def dump(
     dtype_marker: bool = True,
 ) -> None:
     codebook, encoded_data = encode(dataset)
-    header = generate_header_from_codebook(codebook, dtype)
+    header_size, codelengths, symbols = generate_header_from_codebook(codebook, dtype)
 
-    marker_dtype = "s" if isinstance(config.MARKER, str) else "i"
-    marker = tobin(config.MARKER, bitlength=config.MARKER_BITSIZE, dtype=marker_dtype)
+    sof_marker = tobin(config.SOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_TYPE)
+    eof_marker = tobin(config.EOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_TYPE)
 
     dtype_marker_ = config.SUPPORTED_DTYPE_CODEBOOK[dtype].value if dtype_marker else ""
-
-    datapack = bitarray(marker + dtype_marker_ + header + encoded_data)
+    datapack = bitarray(sof_marker + dtype_marker_ + header_size + codelengths + symbols + encoded_data + eof_marker)
 
     if file is not None:
         datapack.tofile(file)
-    else:
-        return datapack.to01()
+        return
+
+    return datapack.to01()
 
 
 def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
+    sof_marker = tobin(config.SOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_TYPE)
+    eof_marker = tobin(config.EOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_TYPE)
+
     try:
-        marker_dtype = "s" if isinstance(config.MARKER, str) else "i"
-        marker = tobin(config.MARKER, bitlength=config.MARKER_BITSIZE, dtype=marker_dtype)
-        _, raw_bindata = partition_bitarray(raw_bindata, delimiter=marker)
+        raw_bindata = partition_bitarray(raw_bindata, delimiter=[sof_marker, eof_marker])[1]
 
         if not dtype:
             encoding_dtype, header_size, huffman_data = partition_bitarray(
@@ -122,15 +123,11 @@ def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDat
             header_size, huffman_data = partition_bitarray(raw_bindata, index=config.HEADER_MARKER_BITSIZE)
             encoding_dtype = dtype
 
-        header, encoding_size, encoded_data = partition_bitarray(
-            huffman_data,
-            index=[ba2int(header_size), config.ENCODED_DATA_MARKER_BITSIZE],
-            continuous=True,
-        )
+        header, encoded_data = partition_bitarray(huffman_data, index=ba2int(header_size))
 
         data_to_decode = {
             "header": header.to01(),
-            "encoded_data": encoded_data[: ba2int(encoding_size)].to01(),
+            "encoded_data": encoded_data.to01(),
             "dtype": encoding_dtype,
         }
 
@@ -140,21 +137,21 @@ def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDat
         raise CorruptedEncodingError(f"encoding cannot be decoded, error occured: {err}")
 
 
-def generate_header_from_codebook(codebook: Dict[ValidDataType, Bitcode], dtype: Type = str) -> Bitcode:
+def generate_header_from_codebook(codebook: Dict[ValidDataType, Bitcode], dtype: str) -> Tuple[Bitcode, Bitcode]:
     codelengths = ["0" * config.CODELENGTH_BITSIZE for _ in range(0, config.MAX_CODELENGTH)]
     counted_codelengths = Counter([len(code) for code in codebook.values()])
 
     for length, count in counted_codelengths.items():
         codelengths[length - 1] = tobin(data=count, bitlength=config.CODELENGTH_BITSIZE, dtype="h")
 
+    codelengths = "".join(codelengths)
     symbols = tobin(list(codebook.keys()), dtype=dtype)
-    header = "".join(codelengths) + symbols
-    header_size = tobin(len(header), bitlength=config.HEADER_MARKER_BITSIZE, dtype="i")
+    header_size = tobin(len(codelengths + symbols), bitlength=config.HEADER_MARKER_BITSIZE, dtype="i")
 
-    return header_size + header
+    return header_size, codelengths, symbols
 
 
-def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, int]], Bitcode]:
+def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, int]], Bitcode, Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     to_process = [([[symbol], count]) for symbol, count in Counter(dataset).most_common()]
     codebook = {symbol[0]: 0 for symbol, _ in to_process}
@@ -204,7 +201,13 @@ def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Bitcode, in
 
     # the actual encoding process for the data
     encoded_data = "".join([canonical_codebook[data] for data in dataset])
-    encoded_datasize = tobin(len(encoded_data), bitlength=config.ENCODED_DATA_MARKER_BITSIZE, dtype="i")
 
     # marker to indicate the size of the encoded data
-    return canonical_codebook, encoded_datasize + encoded_data
+    return canonical_codebook, encoded_data
+
+
+with open("f", "wb") as f:
+    dump("112211222454", "s", f)
+
+with open("f", "rb") as f:
+    print(load(f))

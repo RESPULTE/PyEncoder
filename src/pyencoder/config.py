@@ -2,7 +2,9 @@ from typing import Literal, get_args
 from enum import Enum
 
 # -----------------------------------------------MARKER CONFIGS--------------------------------------------------
-MARKER = "\\"
+SOF_MARKER = "\\"
+EOF_MARKER = "\\"
+MARKER_TYPE = "s"
 MARKER_BITSIZE = 8
 
 # -------------------------------------------ENCODED DATA CONFIGS-------------------------------------------------

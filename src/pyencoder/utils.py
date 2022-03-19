@@ -198,37 +198,61 @@ def partition_bitarray(bitarray_: bitarray, index: List[int], continous: Optiona
 
 def partition_bitarray(
     bitarray_: bitarray,
-    delimiter: Bitcode = None,
+    delimiter: Union[List[Bitcode], Bitcode] = None,
     index: Union[List[int], int] = None,
     continuous: Optional[bool] = False,
 ) -> List[bitarray]:
-    if (
-        (index is None and delimiter is None)
-        or (index != None and delimiter != None)
-        or (delimiter != None and continuous)
-    ):
+    if (index is None and delimiter is None) or (index != None and delimiter != None):
         raise ValueError("either an index or a delimiter is required")
 
-    if delimiter:
-        left_end = bitarray_.index(bitarray(delimiter))
-        right_start = left_end + len(delimiter)
-        return bitarray_[:left_end], bitarray_[right_start:]
-
-    if not isinstance(index, Iterable):
+    if index and not isinstance(index, Iterable):
         return bitarray_[:index], bitarray_[index:]
+
+    if delimiter and not isinstance(delimiter, Iterable):
+        index = bitarray_.index(bitarray(delimiter))
+        return bitarray_[:index], bitarray_[index:]
+
+    if not index:
+        index = []
+        index_range = set()
+        for sep in delimiter:
+            found_indexes = [(ind, len(sep)) for ind in bitarray_.search(bitarray(sep))]
+
+            for i, size in found_indexes:
+                found_index_range = range(i, i + size)
+
+                if not index_range.isdisjoint(found_index_range):
+                    continue
+
+                index_range.update(found_index_range)
+                index.append((i, size))
+
+        index = sorted(index)
 
     to_process = deque(index)
     # add comment later i forgorr what this thing does
-    sections = []
     prev_index = 0
+    sections = []
+
     while to_process:
         curr_index = to_process.popleft()
-        if not continuous:
-            curr_index = curr_index - prev_index
-        sections.append(bitarray_[:curr_index])
-        bitarray_ = bitarray_[curr_index:]
-        prev_index = curr_index
+        left_end = right_start = curr_index
 
-    sections.append(bitarray_)
+        if delimiter:
+            left_end = curr_index[0]
+            right_start = curr_index[0] + curr_index[1]
+
+        section_to_append = bitarray_[:left_end]
+
+        if continuous:
+            bitarray_ = bitarray_[right_start:]
+            prev_index = 0
+
+        sections.append(section_to_append[prev_index:])
+
+        prev_index = right_start
+
+    last_section = bitarray_[prev_index:] if not continuous else bitarray_
+    sections.append(last_section)
 
     return sections
