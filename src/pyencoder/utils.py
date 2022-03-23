@@ -156,7 +156,7 @@ def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int]
     return bindata
 
 
-def frombin(data: Bitcode, dtype: SupportedDataType, num: int) -> ValidDataset:
+def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1) -> ValidDataset:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -178,21 +178,21 @@ def frombin(data: Bitcode, dtype: SupportedDataType, num: int) -> ValidDataset:
         if dtype == "f":
             decoded_data = [round(f, 5) for f in decoded_data]
 
-    return decoded_data
+    return decoded_data if num != 1 else decoded_data[0]
 
 
 @overload
-def partition_bitarray(bitarray_: bitarray, delimiter: ValidDataType):
+def partition_bitarray(bitarray_: bitarray, delimiter: ValidDataType) -> List[bitarray]:
     ...
 
 
 @overload
-def partition_bitarray(bitarray_: bitarray, index: int):
+def partition_bitarray(bitarray_: bitarray, index: int) -> List[bitarray]:
     ...
 
 
 @overload
-def partition_bitarray(bitarray_: bitarray, index: List[int], continous: Optional[bool] = False):
+def partition_bitarray(bitarray_: bitarray, index: List[int], continous: Optional[bool] = False) -> List[bitarray]:
     ...
 
 

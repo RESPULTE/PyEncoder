@@ -1,5 +1,6 @@
 from bisect import insort_left
 from collections import Counter
+from email import header
 from typing import BinaryIO, Union, Optional, Tuple, Dict, List, overload
 
 from bitarray import bitarray
@@ -29,10 +30,9 @@ def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> Vali
             curr_code = ""
             curr_index += 1
 
-    if dtype == "s":
-        decoded_data = "".join(decoded_data[:curr_index])
+    decoded_data = decoded_data[:curr_index]
 
-    return decoded_data
+    return decoded_data if not dtype == "s" else "".join(decoded_data)
 
 
 def dump(
@@ -43,26 +43,23 @@ def dump(
     dtype_marker: bool = True,
     length_encoding: bool = False,
 ) -> None:
-    codebook, encoded_data = encode(dataset, length_encoding=length_encoding)
+    codebook, encoded_data = encode(dataset, dtype=dtype, length_encoding=length_encoding)
     codelengths, symbols = generate_header(
         codebook, dtype if not length_encoding else config.LENGTH_ENCODING_DATA_DTYPE
     )
-
     header_size = tobin(
         len(codelengths + symbols), bitlength=config.HEADER_MARKER_BITSIZE, dtype=config.HEADER_MARKER_DTYPE
     )
-
     sof_marker = tobin(config.SOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_DTYPE)
     eof_marker = tobin(config.EOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_DTYPE)
     dtype_marker = config.SUPPORTED_DTYPE_CODEBOOK[dtype].value if dtype_marker else ""
 
     datapack = bitarray(sof_marker + dtype_marker + header_size + codelengths + symbols + encoded_data + eof_marker)
     datapack.tofile(file)
-
     return datapack.to01()
 
 
-def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDataset:
+def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = None) -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
@@ -71,21 +68,18 @@ def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDat
 
     try:
         raw_bindata = partition_bitarray(raw_bindata, delimiter=[sof_marker, eof_marker])[1]
-
         if not dtype:
             encoding_dtype, header_size, huffman_data = partition_bitarray(
                 raw_bindata, index=[config.DTYPE_MARKER_BITSIZE, config.HEADER_MARKER_BITSIZE], continuous=True
             )
             encoding_dtype = config.SUPPORTED_DTYPE_CODEBOOK(encoding_dtype.to01()).name
-
         else:
             header_size, huffman_data = partition_bitarray(raw_bindata, index=config.HEADER_MARKER_BITSIZE)
             encoding_dtype = dtype
 
         header, encoded_data = partition_bitarray(
-            huffman_data, index=frombin(header_size, dtype=config.HEADER_MARKER_DTYPE)
+            huffman_data, index=frombin(header_size.to01(), dtype=config.HEADER_MARKER_DTYPE)
         )
-
         data_to_decode = {
             "header": header.to01(),
             "encoded_data": encoded_data.to01(),
@@ -99,17 +93,22 @@ def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = "") -> ValidDat
 
 
 @overload
-def encode(dataset: List[Union[float, int]], dtype: SupportedDataType):
+def encode(dataset: List[Union[float, int]], dtype: SupportedDataType, length_encoding: bool = True):
     ...
 
 
 @overload
-def encode(dataset: str, dtype: str = "s"):
+def encode(dataset: List[Union[float, int]], length_encoding: bool = False):
+    ...
+
+
+@overload
+def encode(dataset: str):
     ...
 
 
 def encode(
-    dataset: ValidDataset, dtype: str, *, length_encoding: Optional[bool] = False
+    dataset: ValidDataset, dtype: str = None, *, length_encoding: Optional[bool] = False
 ) -> Tuple[Dict[ValidDataType, Bitcode], Bitcode]:
     if not length_encoding:
         codebook = generate_codebook(dataset)
@@ -199,7 +198,6 @@ def _generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) ->
     try:
         codelength_info = config.CODELENGTH_BITSIZE * config.MAX_CODELENGTH
         bin_codelengths, bin_symbols = header[:codelength_info], header[codelength_info:]
-
         num_symbols_per_codelength = [
             int(bin_codelengths[bitlen : bitlen + config.CODELENGTH_BITSIZE], 2)
             for bitlen in range(0, len(bin_codelengths), config.CODELENGTH_BITSIZE)

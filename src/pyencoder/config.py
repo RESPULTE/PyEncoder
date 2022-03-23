@@ -2,11 +2,11 @@ from typing import Literal, get_args
 from enum import Enum
 
 # -----------------------------------------------MARKER CONFIGS--------------------------------------------------
-SOF_MARKER = "\\"
-EOF_MARKER = "\\"
+SOF_MARKER = "辣"
+EOF_MARKER = "柳"
 
 MARKER_DTYPE = "s"
-MARKER_BITSIZE = 8
+MARKER_BITSIZE = 24
 
 # -------------------------------------------ENCODED DATA CONFIGS-------------------------------------------------
 ENCODED_DATA_MARKER_BITSIZE = 64
