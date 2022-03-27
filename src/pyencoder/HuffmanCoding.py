@@ -1,6 +1,5 @@
 from bisect import insort_left
 from collections import Counter
-from email import header
 from typing import BinaryIO, Union, Optional, Tuple, Dict, List, overload
 
 from bitarray import bitarray
@@ -18,21 +17,33 @@ from pyencoder.type_hints import (
 
 
 def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> ValidDataset:
-    codebook = _generate_codebook_from_header(header, dtype)
-    decoded_data = [None for _ in range(len(encoded_data))]
+    codebook = generate_codebook_from_header(header, dtype)
+    decoded_data = [None] * len(encoded_data)
 
-    curr_code = ""
+    to_process = encoded_data
     curr_index = 0
-    for bit in encoded_data:
-        curr_code += bit
-        if curr_code in codebook:
-            decoded_data[curr_index] = codebook[curr_code]
-            curr_code = ""
-            curr_index += 1
+    curr_code = ""
+
+    while to_process:
+        curr_code += to_process[:1]
+        to_process = to_process[1:]
+
+        if curr_code not in codebook:
+            continue
+
+        curr_elem = codebook[curr_code]
+        if dtype != "s":
+            curr_elem_binsize = curr_elem
+            curr_elem = frombin(to_process[:curr_elem_binsize], dtype)
+            to_process = to_process[curr_elem_binsize:]
+
+        decoded_data[curr_index] = curr_elem
+        curr_index += 1
+        curr_code = ""
 
     decoded_data = decoded_data[:curr_index]
 
-    return decoded_data if not dtype == "s" else "".join(decoded_data)
+    return decoded_data if dtype != "s" else "".join(decoded_data)
 
 
 def dump(
@@ -47,9 +58,11 @@ def dump(
     codelengths, symbols = generate_header(
         codebook, dtype if not length_encoding else config.LENGTH_ENCODING_DATA_DTYPE
     )
+
     header_size = tobin(
         len(codelengths + symbols), bitlength=config.HEADER_MARKER_BITSIZE, dtype=config.HEADER_MARKER_DTYPE
     )
+
     sof_marker = tobin(config.SOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_DTYPE)
     eof_marker = tobin(config.EOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_DTYPE)
     dtype_marker = config.SUPPORTED_DTYPE_CODEBOOK[dtype].value if dtype_marker else ""
@@ -117,6 +130,7 @@ def encode(
 
     bin_dataset = [tobin(data, dtype, bitlength=-1) for data in dataset]
     binlen_dataset = [len(data) for data in bin_dataset]
+
     codebook = generate_codebook(binlen_dataset)
     encoded_data = "".join(
         x for bindata, binlen in zip(bin_dataset, binlen_dataset) for x in (codebook[binlen], bindata)
@@ -191,7 +205,7 @@ def generate_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bitcode]:
     return canonical_codebook
 
 
-def _generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidDataType]:
+def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidDataType]:
     if dtype not in config.SUPPORTED_DTYPE:
         raise TypeError(f"data type not supported: {dtype}")
 
@@ -209,7 +223,7 @@ def _generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) ->
                 f"number of symbols decoded({num_codelength}) does not match the default values({config.MAX_CODELENGTH})"
             )
 
-    except Exception as err:
+    except IndexError as err:
         raise CorruptedHeaderError(f"codelength of header cannot be decoded, error occured: {err}")
 
     try:
