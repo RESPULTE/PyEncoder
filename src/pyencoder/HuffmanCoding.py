@@ -19,7 +19,7 @@ from pyencoder.type_hints import (
 def decode(
     header: Bitcode,
     encoded_data: Bitcode,
-    dtype: Union[Type[Union[int, str, float]], SupportedDataType],
+    dtype: SupportedDataType,
     length_encoding: bool = False,
 ) -> ValidDataset:
     codebook = generate_codebook_from_header(
@@ -59,7 +59,7 @@ def decode(
 
 def dump(
     dataset: ValidDataset,
-    dtype: Union[Type[Union[int, str, float]], SupportedDataType],
+    dtype: SupportedDataType,
     file: BinaryIO,
     *,
     length_encoding: bool = False,
@@ -82,9 +82,7 @@ def dump(
     return datapack.to01()
 
 
-def load(
-    file: BinaryIO, dtype: Union[Type[Union[int, str, float]], SupportedDataType], *, length_encoding: bool = False
-) -> ValidDataset:
+def load(file: BinaryIO, dtype: SupportedDataType, *, length_encoding: bool = False) -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
@@ -116,7 +114,7 @@ def encode(dataset: List[Union[float, int]], dtype: SupportedDataType):
 
 
 def encode(
-    dataset: ValidDataset, dtype: Union[Type[Union[int, str, float]], SupportedDataType], length_encoding: bool = False
+    dataset: ValidDataset, dtype: SupportedDataType, length_encoding: bool = False
 ) -> Tuple[Dict[ValidDataType, Bitcode], Bitcode]:
     if not length_encoding:
         codebook = generate_codebook(dataset)
@@ -133,9 +131,7 @@ def encode(
     return codebook, encoded_data
 
 
-def generate_header(
-    codebook: Dict[ValidDataType, Bitcode], dtype: Union[Type[Union[int, str, float]], SupportedDataType]
-) -> Tuple[Bitcode, Bitcode]:
+def generate_header(codebook: Dict[ValidDataType, Bitcode], dtype: SupportedDataType) -> Tuple[Bitcode, Bitcode]:
     codelengths = ["0" * config.CODELENGTH_BITSIZE for _ in range(0, config.MAX_CODELENGTH)]
     counted_codelengths = Counter([len(code) for code in codebook.values()])
 

@@ -135,23 +135,24 @@ def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int]
     ...
 
 
-def tobin(
-    data: ValidDataset, dtype: Union[Type[Union[int, float, str]], SupportedDataType], bitlength: Optional[int] = None
-) -> Bitcode:
+@overload
+def tobin(data: str, dtype: str = "s", encoding: str = None) -> Bitcode:
+    ...
 
-    # might abstract out to config.py
+
+def tobin(
+    data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = None, *, encoding: Optional[str] = None
+) -> Bitcode:
     if isinstance(dtype, type):
-        if dtype is int:
-            dtype = "i"
-        elif dtype is float:
-            dtype = "d"
-        elif dtype is not str:
+        try:
+            dtype = config.DEFAULT_FORMAT[dtype]
+        except KeyError:
             raise TypeError(f"invalid data type: '{dtype.__name__}'")
 
     if dtype == "s":
         if isinstance(data, list):
             data = "".join(data)
-        byte_data = str.encode(data, config.STRING_ENCODING_FORMAT)
+        byte_data = str.encode(data, encoding or config.DEFAULT_STR_FORMAT)
     else:
         if not isinstance(data, Iterable):
             data = [data]
@@ -188,7 +189,12 @@ def frombin(data: ValidDataset, dtype: SupportedDataType, num: int = 1) -> Valid
     ...
 
 
-def frombin(data: Bitcode, dtype: Union[Type[Union[int, float, str]], SupportedDataType], num: int = 1) -> ValidDataset:
+@overload
+def frombin(data: str, dtype: str = "s", num: Optional[int] = None, encoding: Optional[str] = None) -> ValidDataset:
+    ...
+
+
+def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1, *, encoding: Optional[str] = None) -> ValidDataset:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -203,21 +209,21 @@ def frombin(data: Bitcode, dtype: Union[Type[Union[int, float, str]], SupportedD
     """
     byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder=config.ENDIAN)
 
-    # might abstract out to config.py
     if isinstance(dtype, type):
         if dtype is int:
             return int(data, 2)
-        elif dtype is float:
-            dtype = "d"
-        elif dtype is not str:
+
+        try:
+            dtype = config.DEFAULT_FORMAT[dtype]
+        except KeyError:
             raise TypeError(f"invalid data type: '{dtype.__name__}'")
 
     if dtype == "s":
-        decoded_data = "".join(bytes.decode(byte_data, config.STRING_ENCODING_FORMAT))
+        decoded_data = "".join(bytes.decode(byte_data, encoding or config.DEFAULT_STR_FORMAT))
     else:
         decoded_data = list(struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, dtype), byte_data))
         if dtype == "f":
-            decoded_data = [round(f, 5) for f in decoded_data]
+            decoded_data = [round(f, config.DEFAULT_FLOAT_DECIMAL) for f in decoded_data]
 
     return decoded_data if num != 1 else decoded_data[0]
 

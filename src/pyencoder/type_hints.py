@@ -1,10 +1,12 @@
-from typing import List, NewType, Union, Literal
+from typing import List, NewType, Union, Literal, Type
 
 ValidDataType = Union[str, int, float]
 ValidDataset = Union[str, List[int], List[float]]
 Bitcode = NewType("BitCode", str)
 
-SupportedDataType = Literal["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q", "f", "d", "s"]
+SupportedDataType = Union[
+    Type[Union[int, str, float]], Literal["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q", "f", "d", "s"]
+]
 
 
 class DecodingError(Exception):
