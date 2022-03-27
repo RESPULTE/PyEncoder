@@ -1,4 +1,3 @@
-from typing import Literal, get_args
 from enum import Enum
 
 # -----------------------------------------------MARKER CONFIGS--------------------------------------------------
@@ -21,17 +20,10 @@ HEADER_MARKER_BITSIZE = 32
 HEADER_MARKER_DTYPE = "I"
 
 # ---------------------------------------------DTYPE CONFIGS------------------------------------------------------
-DTYPE_MARKER_BITSIZE = 8
-SUPPORTED_DTYPE = ["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q", "f", "d", "s"]
-
-SUPPORTED_DTYPE_CODEBOOK: Enum = Enum(
-    "SUPPORTED_DTYPE_CODEBOOK",
-    [(dtype, format(index, f"0{DTYPE_MARKER_BITSIZE}b")) for index, dtype in enumerate(SUPPORTED_DTYPE)],
-)
+DEFAULT_FORMAT = {int: "i", float: "d", str: "s"}
 
 # ----------------------------------------------MISC CONFIGS-------------------------------------------------------
 ENDIAN = "big"
 STRING_ENCODING_FORMAT = "utf-8"
-
 
 __all__ = [v for v in vars().keys() if not v.startswith("__") and v.isupper()]

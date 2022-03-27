@@ -1,6 +1,6 @@
 from bisect import insort_left
 from collections import Counter
-from typing import BinaryIO, Union, Optional, Tuple, Dict, List, overload
+from typing import BinaryIO, Type, Union, Optional, Tuple, Dict, List, overload
 
 from bitarray import bitarray
 
@@ -16,8 +16,19 @@ from pyencoder.type_hints import (
 )
 
 
-def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> ValidDataset:
-    codebook = generate_codebook_from_header(header, dtype)
+def decode(
+    header: Bitcode,
+    encoded_data: Bitcode,
+    dtype: Union[Type[Union[int, str, float]], SupportedDataType],
+    length_encoding: bool = False,
+) -> ValidDataset:
+    codebook = generate_codebook_from_header(
+        header, dtype if not length_encoding else config.LENGTH_ENCODING_DATA_DTYPE
+    )
+    if isinstance(dtype, type):
+        dtype = config.DEFAULT_FORMAT[dtype]
+
+    dtype = int if length_encoding and dtype not in ("s", "f", "d") else dtype
     decoded_data = [None] * len(encoded_data)
 
     to_process = encoded_data
@@ -32,7 +43,7 @@ def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> Vali
             continue
 
         curr_elem = codebook[curr_code]
-        if dtype != "s":
+        if dtype != "s" and length_encoding:
             curr_elem_binsize = curr_elem
             curr_elem = frombin(to_process[:curr_elem_binsize], dtype)
             to_process = to_process[curr_elem_binsize:]
@@ -48,10 +59,9 @@ def decode(header: Bitcode, encoded_data: Bitcode, dtype: ValidDataType) -> Vali
 
 def dump(
     dataset: ValidDataset,
-    dtype: SupportedDataType,
+    dtype: Union[Type[Union[int, str, float]], SupportedDataType],
     file: BinaryIO,
     *,
-    dtype_marker: bool = True,
     length_encoding: bool = False,
 ) -> None:
     codebook, encoded_data = encode(dataset, dtype=dtype, length_encoding=length_encoding)
@@ -65,14 +75,16 @@ def dump(
 
     sof_marker = tobin(config.SOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_DTYPE)
     eof_marker = tobin(config.EOF_MARKER, bitlength=config.MARKER_BITSIZE, dtype=config.MARKER_DTYPE)
-    dtype_marker = config.SUPPORTED_DTYPE_CODEBOOK[dtype].value if dtype_marker else ""
 
-    datapack = bitarray(sof_marker + dtype_marker + header_size + codelengths + symbols + encoded_data + eof_marker)
+    datapack = bitarray(sof_marker + header_size + codelengths + symbols + encoded_data + eof_marker)
     datapack.tofile(file)
+
     return datapack.to01()
 
 
-def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = None) -> ValidDataset:
+def load(
+    file: BinaryIO, dtype: Union[Type[Union[int, str, float]], SupportedDataType], *, length_encoding: bool = False
+) -> ValidDataset:
     raw_bindata = bitarray()
     raw_bindata.frombytes(file.read())
 
@@ -81,25 +93,13 @@ def load(file: BinaryIO, *, dtype: Optional[SupportedDataType] = None) -> ValidD
 
     try:
         raw_bindata = partition_bitarray(raw_bindata, delimiter=[sof_marker, eof_marker])[1]
-        if not dtype:
-            encoding_dtype, header_size, huffman_data = partition_bitarray(
-                raw_bindata, index=[config.DTYPE_MARKER_BITSIZE, config.HEADER_MARKER_BITSIZE], continuous=True
-            )
-            encoding_dtype = config.SUPPORTED_DTYPE_CODEBOOK(encoding_dtype.to01()).name
-        else:
-            header_size, huffman_data = partition_bitarray(raw_bindata, index=config.HEADER_MARKER_BITSIZE)
-            encoding_dtype = dtype
+        header_size, huffman_data = partition_bitarray(raw_bindata, index=config.HEADER_MARKER_BITSIZE)
 
         header, encoded_data = partition_bitarray(
             huffman_data, index=frombin(header_size.to01(), dtype=config.HEADER_MARKER_DTYPE)
         )
-        data_to_decode = {
-            "header": header.to01(),
-            "encoded_data": encoded_data.to01(),
-            "dtype": encoding_dtype,
-        }
 
-        return decode(**data_to_decode)
+        return decode(header.to01(), encoded_data.to01(), dtype, length_encoding)
 
     except Exception as err:
         raise CorruptedEncodingError(f"encoding cannot be decoded, error occured: {err}")
@@ -111,17 +111,12 @@ def encode(dataset: List[Union[float, int]], dtype: SupportedDataType, length_en
 
 
 @overload
-def encode(dataset: List[Union[float, int]], length_encoding: bool = False):
-    ...
-
-
-@overload
-def encode(dataset: str):
+def encode(dataset: List[Union[float, int]], dtype: SupportedDataType):
     ...
 
 
 def encode(
-    dataset: ValidDataset, dtype: str = None, *, length_encoding: Optional[bool] = False
+    dataset: ValidDataset, dtype: Union[Type[Union[int, str, float]], SupportedDataType], length_encoding: bool = False
 ) -> Tuple[Dict[ValidDataType, Bitcode], Bitcode]:
     if not length_encoding:
         codebook = generate_codebook(dataset)
@@ -138,10 +133,9 @@ def encode(
     return codebook, encoded_data
 
 
-def generate_header(codebook: Dict[ValidDataType, Bitcode], dtype: SupportedDataType) -> Tuple[Bitcode, Bitcode]:
-    if dtype not in config.SUPPORTED_DTYPE:
-        raise TypeError(f"data type not supported: {dtype}")
-
+def generate_header(
+    codebook: Dict[ValidDataType, Bitcode], dtype: Union[Type[Union[int, str, float]], SupportedDataType]
+) -> Tuple[Bitcode, Bitcode]:
     codelengths = ["0" * config.CODELENGTH_BITSIZE for _ in range(0, config.MAX_CODELENGTH)]
     counted_codelengths = Counter([len(code) for code in codebook.values()])
 
@@ -199,16 +193,13 @@ def generate_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bitcode]:
         if bitlength > prev_bitlength:
             curr_code = curr_code << bitlength - prev_bitlength
 
-        canonical_codebook[symbol] = tobin(curr_code, bitlength=bitlength, dtype="i")
+        canonical_codebook[symbol] = tobin(curr_code, bitlength=bitlength, dtype=config.CODELENGTH_DTYPE)
         prev_bitlength = bitlength
 
     return canonical_codebook
 
 
 def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidDataType]:
-    if dtype not in config.SUPPORTED_DTYPE:
-        raise TypeError(f"data type not supported: {dtype}")
-
     try:
         codelength_info = config.CODELENGTH_BITSIZE * config.MAX_CODELENGTH
         bin_codelengths, bin_symbols = header[:codelength_info], header[codelength_info:]
@@ -237,7 +228,7 @@ def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> 
     for bitlength, num in enumerate(num_symbols_per_codelength, start=1):
 
         for _ in range(num):
-            bincode = tobin(curr_code, bitlength=bitlength, dtype="i")
+            bincode = tobin(curr_code, bitlength=bitlength, dtype=config.CODELENGTH_DTYPE)
             codebook[bincode] = symbols[curr_sym_index]
             curr_sym_index += 1
             curr_code += 1

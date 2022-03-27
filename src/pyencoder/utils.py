@@ -2,7 +2,7 @@ import struct
 from collections import deque
 from bitarray import bitarray
 from functools import lru_cache
-from typing import List, Iterable, Literal, NewType, Optional, Tuple, TypeVar, Union, overload
+from typing import List, Iterable, Literal, NewType, Optional, Tuple, Type, TypeVar, Union, overload
 
 from pyencoder import config
 from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
@@ -125,7 +125,29 @@ def generate_hzigzag_index(row: int, col: int) -> List[Tuple[int, int]]:
     return datapacks
 
 
-def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = 0) -> Bitcode:
+@overload
+def tobin(data: ValidDataset, dtype: Type[Union[int, float, str]], bitlength: Optional[int] = None) -> Bitcode:
+    ...
+
+
+@overload
+def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = None) -> Bitcode:
+    ...
+
+
+def tobin(
+    data: ValidDataset, dtype: Union[Type[Union[int, float, str]], SupportedDataType], bitlength: Optional[int] = None
+) -> Bitcode:
+
+    # might abstract out to config.py
+    if isinstance(dtype, type):
+        if dtype is int:
+            dtype = "i"
+        elif dtype is float:
+            dtype = "d"
+        elif dtype is not str:
+            raise TypeError(f"invalid data type: '{dtype.__name__}'")
+
     if dtype == "s":
         if isinstance(data, list):
             data = "".join(data)
@@ -138,7 +160,7 @@ def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int]
     bindata = "".join("{:08b}".format(b) for b in byte_data)
     binlen = len(bindata)
 
-    if bitlength == 0:
+    if bitlength is None:
         return bindata
 
     elif bitlength == -1:
@@ -156,7 +178,17 @@ def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int]
     return bindata
 
 
-def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1) -> ValidDataset:
+@overload
+def frombin(data: ValidDataset, dtype: Type[Union[int, float, str]], num: int = 1) -> ValidDataset:
+    ...
+
+
+@overload
+def frombin(data: ValidDataset, dtype: SupportedDataType, num: int = 1) -> ValidDataset:
+    ...
+
+
+def frombin(data: Bitcode, dtype: Union[Type[Union[int, float, str]], SupportedDataType], num: int = 1) -> ValidDataset:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -170,6 +202,15 @@ def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1) -> ValidDatas
         Union[int, float, str]: converted data
     """
     byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder=config.ENDIAN)
+
+    # might abstract out to config.py
+    if isinstance(dtype, type):
+        if dtype is int:
+            return int(data, 2)
+        elif dtype is float:
+            dtype = "d"
+        elif dtype is not str:
+            raise TypeError(f"invalid data type: '{dtype.__name__}'")
 
     if dtype == "s":
         decoded_data = "".join(bytes.decode(byte_data, config.STRING_ENCODING_FORMAT))
@@ -192,15 +233,15 @@ def partition_bitarray(bitarray_: bitarray, index: int) -> List[bitarray]:
 
 
 @overload
-def partition_bitarray(bitarray_: bitarray, index: List[int], continous: Optional[bool] = False) -> List[bitarray]:
+def partition_bitarray(bitarray_: bitarray, index: List[int], continous: bool = False) -> List[bitarray]:
     ...
 
 
 def partition_bitarray(
     bitarray_: bitarray,
-    delimiter: Union[List[Bitcode], Bitcode] = None,
-    index: Union[List[int], int] = None,
-    continuous: Optional[bool] = False,
+    delimiter: Optional[Union[List[Bitcode], Bitcode]] = None,
+    index: Optional[Union[List[int], int]] = None,
+    continuous: bool = False,
 ) -> List[bitarray]:
     if (index is None and delimiter is None) or (index != None and delimiter != None):
         raise ValueError("either an index or a delimiter is required")
