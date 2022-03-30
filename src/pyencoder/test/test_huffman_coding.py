@@ -1,5 +1,4 @@
 import tempfile
-import pytest
 import os
 
 from pyencoder import HuffmanCoding as hc

@@ -1,11 +1,9 @@
-from enum import Enum
-
 # -----------------------------------------------MARKER CONFIGS--------------------------------------------------
 SOF_MARKER = "辣"
 EOF_MARKER = "柳"
 
 MARKER_DTYPE = "s"
-MARKER_BITSIZE = 24
+MARKER_BITSIZE = 32
 
 # -------------------------------------------ENCODED DATA CONFIGS-------------------------------------------------
 ENCODED_DATA_MARKER_BITSIZE = 64
