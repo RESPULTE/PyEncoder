@@ -3,7 +3,7 @@ from collections import deque
 from typing import List, Iterable, Optional, Sequence, Tuple, Type, Union, overload
 
 from pyencoder import config
-from pyencoder.type_hints import Bitcode, ValidDataset, SupportedDataType
+from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
 
 
 @overload
@@ -24,21 +24,13 @@ def tobin(data: str, dtype: str = "s", encoding: str = None) -> Bitcode:
 def tobin(
     data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = None, *, encoding: Optional[str] = None
 ) -> Bitcode:
-    if isinstance(dtype, type) and dtype != bytes:
+    if not isinstance(data, bytes):
+        data = tobytes(data, dtype)
+    if isinstance(data, (list, tuple)) and isinstance(data[0], bytes):
         try:
-            dtype = config.DEFAULT_FORMAT[dtype]
-        except KeyError:
-            raise TypeError(f"invalid data type: '{dtype.__name__}'")
-
-    if isinstance(dtype, str):
-        if dtype == "s":
-            if isinstance(data, list):
-                data = "".join(data)
-            data = str.encode(data, encoding or config.DEFAULT_STR_FORMAT)
-        else:
-            if not isinstance(data, Iterable):
-                data = [data]
-            data = struct.pack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", len(data), dtype), *data)
+            data = b"".join(data)
+        except ValueError:
+            raise TypeError("inconsistent data type in list of bytes")
 
     bindata = "".join("{:08b}".format(b) for b in data)
     binlen = len(bindata)
@@ -89,31 +81,79 @@ def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1, *, encoding: 
     Returns:
         Union[int, float, str]: converted data
     """
+    return frombytes(tobytes(data, "bin"), dtype, num, encoding=encoding)
+
+
+def tobytes(
+    data: ValidDataset, dtype: SupportedDataType, bytelength: Optional[int] = None, *, encoding: Optional[str] = None
+) -> bytes:
+    if dtype in ("s", str):
+        if isinstance(data, list):
+            data = "".join(data)
+        bytedata = str.encode(data, encoding or config.DEFAULT_STR_FORMAT)
+    elif dtype == "bin":
+        bytedata = int(data, 2).to_bytes((len(data) + 7) // 8, config.ENDIAN)
+    else:
+        if dtype == float:
+            dtype = config.DEFAULT_FLOAT_FORMAT
+        elif dtype == int:
+            dtype = config.DEFAULT_INT_FORMAT
+
+        if not isinstance(data, Iterable):
+            data = [data]
+        bytedata = struct.pack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", len(data), dtype), *data)
+
+    encoded_bytelen = len(bytedata)
+
+    if bytelength is None:
+        return bytedata
+
+    elif bytelength == -1:
+        return bytedata.lstrip(bytes(1))
+
+    elif encoded_bytelen > bytelength:
+        actual_binlen = len(bytedata.lstrip(bytes(1)))
+        if actual_binlen > bytelength:
+            raise ValueError(f"data's bytelength({actual_binlen}) is longer than the given bytelength({bytelength})")
+        bytedata = bytedata.removeprefix(bytes(1) * (encoded_bytelen - bytelength))
+
+    elif bytedata < bytelength:
+        bytedata = bytes(bytelength) + bytedata
+
+    return bytedata
+
+
+def frombytes(data: bytes, dtype: SupportedDataType, num: int = 1, *, encoding: Optional[str] = None) -> ValidDataset:
+    """converts a string of 0 and 1 back into the original data
+
+    Args:
+        data (BinaryCode): a string of 0 and 1
+        dtype (Union[int, float, str]): the desired data type to convert to
+
+    Raises:
+        TypeError: if the desired datatype is not of the integer, floats or strings data type
+
+    Returns:
+        Union[int, float, str]: converted data
+    """
 
     if dtype is int:
         stop = len(data)
         step = stop // num
-        return [int(data[i : i + step], 2) for i in range(0, stop, step)]
+        return [int.from_bytes(data[i : i + step], config.ENDIAN) for i in range(0, stop, step)]
 
-    byte_data = int(data, 2).to_bytes((len(data) + 7) // 8, byteorder=config.ENDIAN)
+    if dtype in ("s", str):
+        return "".join(bytes.decode(data, encoding or config.DEFAULT_STR_FORMAT))
 
-    if dtype is bytes:
-        return byte_data
+    elif dtype == "bin":
+        return "".join("{:08b}".format(b) for b in data)
 
-    if isinstance(dtype, type):
-        try:
-            dtype = config.DEFAULT_FORMAT[dtype]
-        except KeyError:
-            raise TypeError(f"invalid data type: '{dtype.__name__}'")
-
-    if dtype == "s":
-        decoded_data = "".join(bytes.decode(byte_data, encoding or config.DEFAULT_STR_FORMAT))
     else:
-        decoded_data = list(struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, dtype), byte_data))
-        if dtype == "f":
-            decoded_data = [round(f, config.DEFAULT_FLOAT_DECIMAL) for f in decoded_data]
-
-    return decoded_data if num != 1 else decoded_data[0]
+        try:
+            decoded_data = list(struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, dtype), data))
+            return decoded_data if num != 1 else decoded_data[0]
+        except struct.error:
+            raise TypeError(f"cannot convert byte data to '{dtype}'")
 
 
 import re

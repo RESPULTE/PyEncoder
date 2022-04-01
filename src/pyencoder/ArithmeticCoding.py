@@ -1,110 +1,77 @@
-from decimal import Decimal, getcontext
-from collections import Counter
-from typing import BinaryIO, Optional, Tuple, Dict
+from collections import Counter, namedtuple
+from typing import Dict
 
-from pyencoder import config
-from pyencoder.utils.binary import tobin, frombin, Bitstring
-from pyencoder.type_hints import (
-    CorruptedHeaderError,
-    CorruptedEncodingError,
-    SupportedDataType,
-    ValidDataType,
-    ValidDataset,
-    Bitcode,
-)
+from pyencoder.type_hints import ValidDataType, ValidDataset, Bitcode
 
-# refer to nayuki's project for guidance
-def encode(dataset: ValidDataset) -> Tuple[Dict[ValidDataType, Tuple[Decimal, Decimal]], Bitcode]:
-    codebook = _generate_codebook_from_dataset(dataset)
+SymbolProbabilityRange = namedtuple("SymbolProbabilityRange", ["lower_limit", "upper_limit"])
 
-    start = Decimal(0)
-    delta = Decimal(1)
+
+class ArithmeticCodeRange:
+    def __init__(self, percision: int) -> None:
+        self.full_range = 1 << percision
+        self.half_range = self.full_range >> 1
+        self.quarter_range = self.half_range >> 1
+
+        self.min_range = self.quarter_range >> 1 + 2
+        # Bit mask of num_state_bits ones, which is 0111...111.
+        self.bit_mask = self.full_range - 1
+
+        # ---mutable attribute---
+        # Low end of this arithmetic coder's current range. Conceptually has an infinite number of trailing 0s.
+        self.lower_limit = 0
+        # High end of this arithmetic coder's current range. Conceptually has an infinite number of trailing 1s.
+        self.upper_limit = self.bit_mask
+
+    def __post_init__(self) -> None:
+        # if lower_limit >= upper_limit or (lower_limit & lookup_table.bit_mask) != lower_limit or (upper_limit & lookup_table.bit_mask) != upper_limit:
+        #     raise AssertionError("Low or upper_limit out of range")
+
+        # if not (lookup_table.min_range <= lookup_table.range <= lookup_table.full_range):
+        #     raise AssertionError("Range out of range")
+        pass
+
+    @property
+    def range(self) -> float:
+        return self.upper_limit - self.lower_limit + 1
+
+
+def generate_probability_table(dataset: ValidDataset) -> Dict[ValidDataType, SymbolProbabilityRange]:
+    frequency_table: Dict[str, SymbolProbabilityRange] = {}
+    cummulative_proabability = 0
+    for sym, count in Counter(dataset).most_common():
+        sym_lower_limit = cummulative_proabability
+        sym_upper_limit = cummulative_proabability + count
+        frequency_table[sym] = SymbolProbabilityRange(sym_lower_limit, sym_upper_limit)
+
+        cummulative_proabability = sym_upper_limit
+
+    return frequency_table
+
+
+def encode(dataset: ValidDataset, percision: int = 32) -> Bitcode:
+    frequency_table = generate_probability_table(dataset)
+    range_table = ArithmeticCodeRange(percision)
+    total_elem = len(dataset)
+    encoded_data = []
 
     for sym in dataset:
-        sym_start, sym_delta = codebook[sym]
-        start += delta * sym_start
-        delta *= sym_delta
+        sym_prob = frequency_table[sym]
 
-    return codebook, start
+        range_table.upper_limit = range_table.lower_limit + (sym_prob.upper_limit * range_table.range // total_elem) - 1
+        range_table.lower_limit = range_table.lower_limit + (sym_prob.lower_limit * range_table.range // total_elem)
 
+        # While low and high have the same top bit value, shift them out
+        while ((range_table.lower_limit ^ range_table.upper_limit) & range_table.half_range) == 0:
+            range_table.shift()
+            range_table.lower_limit = (range_table.lower_limit << 1) & range_table.bit_mask
+            range_table.upper_limit = ((range_table.upper_limit << 1) & range_table.bit_mask) | 1
 
-def decode(
-    codebook: Dict[Tuple[Decimal, Decimal], ValidDataType],
-    encoded_data: float,
-    dtype: SupportedDataType,
-) -> ValidDataset:
-    start = Decimal(0)
-    delta = Decimal(1)
-    decoded_data = []
+        # Now low's top bit must be 0 and high's top bit must be 1
 
-    while start != encoded_data:
-
-        for (sym_start, sym_delta), sym in codebook.items():
-            new_start = start + (delta * sym_start)
-            new_delta = delta * sym_delta
-
-            if not (new_start < encoded_data < new_start + new_delta) and new_start != encoded_data:
-                continue
-
-            decoded_data.append(sym)
-
-            start, delta = new_start, new_delta
-            if start == encoded_data:
-                break
-
-    if dtype == "s":
-        decoded_data = "".join(decoded_data)
-
-    return decoded_data
-
-
-def dump(dataset: ValidDataset, dtype: SupportedDataType, file: BinaryIO) -> None:
-    pass
-
-
-def load(file: BinaryIO, dtype: SupportedDataType) -> ValidDataset:
-    pass
-
-
-def _generate_codebook_from_dataset(dataset: ValidDataset) -> Dict[ValidDataType, Tuple[Decimal, Decimal]]:
-    to_process = Counter(dataset).most_common()
-
-    start = Decimal(0)
-    codebook = {}
-    dataset_size = Decimal(len(dataset))
-    for symbol, count in to_process:
-        delta = count / dataset_size
-        codebook[symbol] = (start, delta)
-        start += delta
-
-    return codebook
-
-
-# def generate_codebook_from_header(
-#     header: Bitcode, dtype: SupportedDataType
-# ) -> Dict[ValidDataType, Tuple[Decimal, Decimal]]:
-#     while header:
-
-#         symbol = header[:8]
-
-
-# def generate_header_from_codebook(
-#     codebook: Dict[ValidDataType, Tuple[Decimal, Decimal]], dtype: SupportedDataType
-# ) -> Bitcode:
-#     probabilities = ["0" * config.CODELENGTH_BITSIZE for _ in range(0, config.MAX_CODELENGTH)]
-
-#     for sym, prob in codebook.items():
-#         probabilities[length - 1] = tobin(
-#             data=count, bitlength=config.CODELENGTH_BITSIZE, dtype=config.CODELENGTH_DTYPE
-#         )
-
-#     probabilities = "".join(probabilities)
-#     symbols = tobin(list(codebook.keys()), dtype=dtype)
-
-#     return probabilities, symbols
-
-# getcontext().prec = 5
-# s = "Never gonna give you up" * 10
-# cb, ed = encode(s)
-# cb = {v: k for k, v in cb.items()}
-# print(decode(cb, ed, "s"))
+        # While low's top two bits are 01 and high's are 10, delete the second highest bit of both
+        while (range_table.lower_limit & ~range_table.upper_limit & range_table.quarter_range) != 0:
+            range_table.underflow()
+            range_table.lower_limit = (range_table.lower_limit << 1) ^ range_table.half_range
+            range_table.upper_limit = (
+                ((range_table.upper_limit ^ range_table.half_range) << 1) | range_table.half_range | 1
+            )

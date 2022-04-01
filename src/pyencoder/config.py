@@ -23,6 +23,7 @@ DEFAULT_FORMAT = {int: "i", float: "d", str: "s"}
 # ----------------------------------------------MISC CONFIGS-------------------------------------------------------
 ENDIAN = "big"
 DEFAULT_STR_FORMAT = "utf-8"
-DEFAULT_FLOAT_DECIMAL = 5
+DEFAULT_INT_FORMAT = "i"
+DEFAULT_FLOAT_FORMAT = "f"
 
 __all__ = [v for v in vars().keys() if not v.startswith("__") and v.isupper()]

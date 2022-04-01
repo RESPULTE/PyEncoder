@@ -1,8 +1,6 @@
-from typing import Optional, TypeVar, List, Tuple, overload
+from typing import Optional, List, Tuple, overload
 
-from pyencoder.type_hints import ValidDataset
-
-T = TypeVar("T")
+from pyencoder.type_hints import ValidDataset, T
 
 
 @overload
@@ -66,18 +64,3 @@ def general_encode(dataset: ValidDataset) -> List[Tuple[int, T]]:
         encoded_data.append((count, curr_elem))
 
     return encoded_data
-
-
-# a bit stupid
-def decode(encoded_data: List[Tuple[T, int]]) -> List[Tuple[T, int]]:
-    decoded_data = []
-
-    for data in encoded_data:
-        if isinstance(data, tuple):
-            data, count = data
-            decoded_data.extend([data] * count)
-            continue
-
-        decoded_data.append(data)
-
-    return decoded_data
