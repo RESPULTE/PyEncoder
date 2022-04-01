@@ -266,3 +266,10 @@ def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> 
         curr_code = curr_code << 1
 
     return codebook
+
+
+with open("f", "wb") as f:
+    dump("ubvoqnorvui34gpuv2475y8642^**(OKJDERRTUIKoeriuvbqervniqerbve", str, f)
+
+with open("f", "rb") as f:
+    print(load(f, str))
