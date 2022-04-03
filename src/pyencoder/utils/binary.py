@@ -42,13 +42,15 @@ def tobin(
         if signed:
             for index, d in enumerate(__data):
                 b = bin(d)
-                b = "0" + b[2:] if d > 0 else b[3:]
+                b = "0" + b[2:] if d >= 0 else b[3:]
                 bindata[index] = b
         else:
             bindata = (bin(d)[2:] for d in __data)
 
     else:
-        bindata = ("{:08b}".format(b) for b in tobytes(__data, __dtype))
+        if not isinstance(__data, bytes):
+            __data = tobytes(__data, __dtype)
+        bindata = ("{:08b}".format(b) for b in __data)
 
     bindata = "".join(bindata)
     binlen = len(bindata)
@@ -236,57 +238,57 @@ def frombytes(
             raise TypeError(f"cannot convert byte data to '{__dtype}'")
 
 
-def xsplit(
-    __s: str,
-    delimiter: Optional[List[str] | str] = None,
-    index: Optional[List[int] | int] = None,
-    *,
-    continuous: bool = False,
-) -> List[str]:
-    def findall(__s, __sub_s: str | Sequence[str]) -> List[Tuple[int, int]]:
-        if not isinstance(__sub_s, (list, tuple)):
-            __sub_s = [__sub_s]
-        return [mo.span() for sub_s in __sub_s for mo in re.finditer(f"({sub_s})", __s)]
+# def xsplit(
+#     __s: str,
+#     delimiter: Optional[List[str] | str] = None,
+#     index: Optional[List[int] | int] = None,
+#     *,
+#     continuous: bool = False,
+# ) -> List[str]:
+#     def findall(__s, __sub_s: str | Sequence[str]) -> List[Tuple[int, int]]:
+#         if not isinstance(__sub_s, (list, tuple)):
+#             __sub_s = [__sub_s]
+#         return [mo.span() for sub_s in __sub_s for mo in re.finditer(f"({sub_s})", __s)]
 
-    if (index is None and delimiter is None) or (index != None and delimiter != None):
-        raise ValueError("either an index or a delimiter is required")
+#     if (index is None and delimiter is None) or (index != None and delimiter != None):
+#         raise ValueError("either an index or a delimiter is required")
 
-    if not delimiter and not isinstance(index, Iterable):
-        index = [index]
+#     if not delimiter and not isinstance(index, Iterable):
+#         index = [index]
 
-    to_process = deque(findall(__s, delimiter) if not index else index)
-    prev_index = 0
-    sections = []
+#     to_process = deque(findall(__s, delimiter) if not index else index)
+#     prev_index = 0
+#     sections = []
 
-    if index:
-        while to_process:
-            curr_index = to_process.popleft()
+#     if index:
+#         while to_process:
+#             curr_index = to_process.popleft()
 
-            section_to_append = __s[:curr_index]
+#             section_to_append = __s[:curr_index]
 
-            if continuous:
-                __s = __s[curr_index:]
-                prev_index = 0
+#             if continuous:
+#                 __s = __s[curr_index:]
+#                 prev_index = 0
 
-            sections.append(section_to_append[prev_index:])
-            prev_index = curr_index
+#             sections.append(section_to_append[prev_index:])
+#             prev_index = curr_index
 
-        last_section = __s[prev_index:] if not continuous else __s
-        sections.append(last_section)
-        return sections
+#         last_section = __s[prev_index:] if not continuous else __s
+#         sections.append(last_section)
+#         return sections
 
-    while to_process:
-        left_end, right_start = to_process.popleft()
+#     while to_process:
+#         left_end, right_start = to_process.popleft()
 
-        section_to_append = __s[:left_end]
+#         section_to_append = __s[:left_end]
 
-        if continuous:
-            __s = __s[right_start:]
-            prev_index = 0
+#         if continuous:
+#             __s = __s[right_start:]
+#             prev_index = 0
 
-        sections.append(section_to_append[prev_index:])
-        prev_index = right_start
+#         sections.append(section_to_append[prev_index:])
+#         prev_index = right_start
 
-    last_section = __s[prev_index:] if not continuous else __s
-    sections.append(last_section)
-    return sections
+#     last_section = __s[prev_index:] if not continuous else __s
+#     sections.append(last_section)
+#     return sections

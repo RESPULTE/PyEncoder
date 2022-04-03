@@ -5,7 +5,7 @@ from typing import BinaryIO, Literal, Optional, Type, Tuple, Dict, List, overloa
 from numpy import isin
 
 from pyencoder import config
-from pyencoder.utils.binary import frombin, frombytes, tobin, tobytes, xsplit
+from pyencoder.utils.binary import frombin, frombytes, tobin, tobytes
 from pyencoder.type_hints import (
     CorruptedHeaderError,
     CorruptedEncodingError,
@@ -114,6 +114,7 @@ def encode(
     encoded_data = "".join(
         x for binlen, bindata in zip(binlen_dataset, bin_dataset) for x in (codebook[binlen], bindata)
     )
+
     return codebook, encoded_data
 
 
@@ -157,14 +158,15 @@ def load(
     eof_marker = tobin(eof_marker or config.EOF_MARKER, config.MARKER_DTYPE, bitlength=config.MARKER_BITSIZE)
 
     try:
-        partitioned_raw_bindata = xsplit(raw_bindata, delimiter=[sof_marker, eof_marker])
-        if len(partitioned_raw_bindata) != 3:
-            raise CorruptedEncodingError("faulty EOF or SOF marker")
-        raw_encoded_data = partitioned_raw_bindata[1]
+        raw_encoded_data = raw_bindata.split(sof_marker, maxsplit=1)[1].rsplit(eof_marker, maxsplit=1)[0]
 
-        header_size, huffman_data = xsplit(raw_encoded_data, index=config.HEADER_MARKER_BITSIZE)
+        header_size, huffman_data = (
+            frombin(raw_encoded_data[: config.HEADER_MARKER_BITSIZE], config.HEADER_MARKER_DTYPE),
+            raw_encoded_data[config.HEADER_MARKER_BITSIZE :],
+        )
 
-        header, encoded_data = xsplit(huffman_data, index=frombin(header_size, config.HEADER_MARKER_DTYPE))
+        header, encoded_data = huffman_data[:header_size], huffman_data[header_size:]
+
         codebook = generate_codebook_from_header(
             header, dtype if not length_encoding else config.LENGTH_ENCODING_DATA_DTYPE
         )
