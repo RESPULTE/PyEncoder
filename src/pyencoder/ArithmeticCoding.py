@@ -18,14 +18,12 @@ class ArithmeticCoderLookUp:
         # --- state attributes --- #
         self.underflowed_bits = 0
         self.lower_limit = 0  # (Conceptually) contains infinite number of trailing 0s.
-        self.upper_limit = self.bit_mask  # (Conceptually) contains infinite number of trailing 1s.
+        self.upper_limit = self.full_range - 1  # (Conceptually) contains infinite number of trailing 1s.
 
         # --- helper attributes --- #
         self.min_range = self.quarter_range >> 1 + 2  # used for error checking
-        self.shift_range = (
-            self.percision - 1
-        )  # used for determining the number of values to shift to get the most significant bit
-        self.bit_mask = self.full_range - 1  # used for getting rid of most significant bit in the updating process
+        self.shift_range = self.percision - 1  # used for shifting the number of values to get the most significant bit
+        self.bit_mask = self.upper_limit  # used for getting rid of most significant bit in the updating process
 
     def __post_init__(self) -> None:
         # if lower_limit >= upper_limit or (lower_limit & lookup_table.bit_mask) != lower_limit or (upper_limit & lookup_table.bit_mask) != upper_limit:
@@ -183,5 +181,4 @@ def encode(dataset: ValidDataset, percision: int = 32) -> Bitcode:
 #     length_encoding: bool = False,
 # ) -> ValidDataset:
 #     PASS
-# print(encode("1294jfrioqevqer3rw21"))
-
+print(encode("1294jfrioqevqer3rw21"))

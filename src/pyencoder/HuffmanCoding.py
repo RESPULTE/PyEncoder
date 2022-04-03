@@ -1,8 +1,6 @@
-from bisect import insort_left
+from heapq import heappop, heappush, heapify
 from collections import Counter
 from typing import BinaryIO, Literal, Optional, Type, Tuple, Dict, List, overload
-
-from numpy import isin
 
 from pyencoder import config
 from pyencoder.utils.binary import frombin, frombytes, tobin, tobytes
@@ -159,6 +157,8 @@ def load(
 
     try:
         raw_encoded_data = raw_bindata.split(sof_marker, maxsplit=1)[1].rsplit(eof_marker, maxsplit=1)[0]
+        if raw_encoded_data == "":
+            raise CorruptedEncodingError("faulty EOF or SOF marker")
 
         header_size, huffman_data = (
             frombin(raw_encoded_data[: config.HEADER_MARKER_BITSIZE], config.HEADER_MARKER_DTYPE),
@@ -191,30 +191,116 @@ def generate_header_from_codebook(
     return codelengths, symbols
 
 
-def generate_codebook_from_dataset(dataset: ValidDataset) -> Dict[ValidDataType, Bitcode]:
+def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidDataType, Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
-    to_process = [([[symbol], count]) for symbol, count in Counter(dataset).most_common()]
-    codebook = {symbol[0]: 0 for symbol, _ in to_process}
+    counted_dataset = Counter(dataset).most_common()
+    counted_dataset = [
+        ((0, 2), 37838),
+        ((0, 1), 28872),
+        ((1, 1), 14430),
+        ((2, 1), 8107),
+        ((0, 3), 7785),
+        ((3, 1), 5213),
+        ((0, 4), 4482),
+        ((15, 2), 4228),
+        ((4, 1), 3581),
+        ((1, 2), 3024),
+        ((5, 1), 2794),
+        ((6, 1), 2456),
+        ((0, 5), 2224),
+        ((7, 1), 1685),
+        ((8, 1), 1407),
+        ((9, 1), 1316),
+        ((10, 1), 1164),
+        ((1, 3), 939),
+        ((11, 1), 856),
+        ((12, 1), 724),
+        ((13, 1), 686),
+        ((0, 6), 683),
+        ((2, 2), 670),
+        ((14, 1), 647),
+        ((15, 1), 553),
+        ((3, 2), 332),
+        ((1, 4), 282),
+        ((2, 3), 181),
+        ((16, 1), 163),
+        ((4, 2), 158),
+        ((17, 1), 126),
+        ((18, 1), 105),
+        ((5, 2), 98),
+        ((19, 1), 95),
+        ((3, 3), 71),
+        ((0, 7), 61),
+        ((20, 1), 60),
+        ((1, 5), 56),
+        ((2, 4), 39),
+        ((6, 2), 37),
+        ((27, 1), 34),
+        ((23, 1), 33),
+        ((21, 1), 33),
+        ((24, 1), 31),
+        ((22, 1), 25),
+        ((7, 2), 21),
+        ((26, 1), 20),
+        ((25, 1), 19),
+        ((4, 3), 19),
+        ((29, 1), 17),
+        ((1, 6), 17),
+        ((5, 3), 16),
+        ((8, 2), 14),
+        ((30, 1), 13),
+        ((32, 1), 12),
+        ((28, 1), 10),
+        ((3, 4), 9),
+        ((2, 5), 7),
+        ((5, 4), 6),
+        ((31, 1), 5),
+        ((4, 4), 5),
+        ((9, 2), 5),
+        ((3, 5), 3),
+        ((7, 3), 3),
+        ((34, 1), 2),
+        ((6, 3), 2),
+        ((2, 6), 2),
+        ((9, 3), 2),
+        ((10, 2), 2),
+        ((41, 1), 1),
+        ((40, 1), 1),
+        ((2, 7), 1),
+        ((6, 4), 1),
+        ((4, 5), 1),
+        ((1, 7), 1),
+    ]
+    # [(frequency, max_bitlength, symbol)]
+    to_process = [(count, 1, [symbol]) for symbol, count in counted_dataset]
+    codebook = {symbol: 0 for symbol, _ in counted_dataset}
+
+    heapify(to_process)
     # building the huffman tree
     while len(to_process) != 1:
-        (symbol_1, count_1), (symbol_2, count_2) = to_process[:-3:-1]
+        tree_freq_1, tree_max_bitlength_1, tree_1 = heappop(to_process)
+        tree_freq_2, tree_max_bitlength_2, tree_2 = heappop(to_process)
 
-        to_process = to_process[:-2]
+        new_subtree = tree_1 + tree_2
+        new_subtree_freq = tree_freq_1 + tree_freq_2
+        new_subtree_max_bitlength = max(tree_max_bitlength_1, tree_max_bitlength_2) + 1
 
-        # insert the newly formed subtree back into the list
-        # PS: not so sure why i added the sort key with a negative for its frequency
-        #     but the entire process fails without it so.... yeea :/
-        insort_left(
+        for sym in new_subtree:
+            codebook[sym] += 1
+
+        balance_factor = 0
+        if to_process:
+            balance_factor = to_process[0][0]
+
+        heappush(
             to_process,
-            (symbol_1 + symbol_2, count_1 + count_2),
-            key=lambda data: -data[1],
+            (
+                new_subtree_freq + balance_factor,
+                new_subtree_max_bitlength,
+                new_subtree,
+            ),
         )
 
-        # for every element/symbol in the subtree, plus 1 for their code length
-        for sym_1 in symbol_1:
-            codebook[sym_1] += 1
-        for sym_2 in symbol_2:
-            codebook[sym_2] += 1
     else:
         if len(codebook) == 1:
             return {k: v + 1 for k, v in codebook.items()}
@@ -239,9 +325,9 @@ def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bi
         # if the bitlength of this symbol is more than the last symbol, left-shift the code using bitwise operation
         curr_code += 1
         if bitlength > prev_bitlength:
-            curr_code = curr_code << bitlength - prev_bitlength
+            curr_code = curr_code << (bitlength - prev_bitlength)
 
-        canonical_codebook[symbol] = tobin(curr_code, config.CODELENGTH_DTYPE, bitlength=bitlength)
+        canonical_codebook[symbol] = tobin(curr_code, "I", bitlength=bitlength)
         prev_bitlength = bitlength
 
     return canonical_codebook
