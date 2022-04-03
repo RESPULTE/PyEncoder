@@ -1,44 +1,66 @@
+import re
 import struct
 from collections import deque
+from turtle import right
 from typing import List, Iterable, Optional, Sequence, Tuple, Type, Union, overload
+
+from numpy import isin
 
 from pyencoder import config
 from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
 
 
 @overload
-def tobin(data: ValidDataset, dtype: Type[Union[int, float, str]], bitlength: Optional[int] = None) -> Bitcode:
+def tobin(__data: ValidDataset, __dtype: Type[Union[int, float, str]], bitlength: Optional[int] = None) -> Bitcode:
     ...
 
 
 @overload
-def tobin(data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = None) -> Bitcode:
+def tobin(__data: ValidDataset, __dtype: SupportedDataType, bitlength: Optional[int] = None) -> Bitcode:
     ...
 
 
 @overload
-def tobin(data: str, dtype: str = "s", encoding: str = None) -> Bitcode:
+def tobin(__data: str, __dtype: str = "s", encoding: str = None) -> Bitcode:
     ...
 
 
 def tobin(
-    data: ValidDataset, dtype: SupportedDataType, bitlength: Optional[int] = None, *, encoding: Optional[str] = None
+    __data: ValidDataset,
+    __dtype: Optional[SupportedDataType | bytes],
+    bitlength: Optional[int] = None,
+    *,
+    encoding: Optional[str] = None,
+    signed: bool = True,
 ) -> Bitcode:
-    if not isinstance(data, bytes):
-        data = tobytes(data, dtype)
-    if isinstance(data, (list, tuple)) and isinstance(data[0], bytes):
-        try:
-            data = b"".join(data)
-        except ValueError:
-            raise TypeError("inconsistent data type in list of bytes")
 
-    bindata = "".join("{:08b}".format(b) for b in data)
+    if __dtype is int:
+        if not isinstance(__data, Iterable):
+            __data = [__data]
+
+        bindata = [None] * len(__data)
+        if signed:
+            for index, d in enumerate(__data):
+                b = bin(d)
+                b = "0" + b[2:] if d > 0 else b[3:]
+                bindata[index] = b
+        else:
+            bindata = (bin(d)[2:] for d in __data)
+
+    else:
+        bindata = ("{:08b}".format(b) for b in tobytes(__data, __dtype))
+
+    bindata = "".join(bindata)
     binlen = len(bindata)
 
     if bitlength is None:
         return bindata
 
     elif bitlength == -1:
+        if all(b == "0" for b in bindata):
+            return "0"
+        elif signed:
+            return "0" + bindata.lstrip("0")
         return bindata.lstrip("0")
 
     elif binlen > bitlength:
@@ -54,21 +76,28 @@ def tobin(
 
 
 @overload
-def frombin(data: ValidDataset, dtype: Type[Union[int, float, str]], num: int = 1) -> ValidDataset:
+def frombin(__data: ValidDataset, __dtype: Type[Union[int, float, str]], num: int = 1) -> ValidDataset:
     ...
 
 
 @overload
-def frombin(data: ValidDataset, dtype: SupportedDataType, num: int = 1) -> ValidDataset:
+def frombin(__data: ValidDataset, __dtype: SupportedDataType, num: int = 1) -> ValidDataset:
     ...
 
 
 @overload
-def frombin(data: str, dtype: str = "s", num: Optional[int] = None, encoding: Optional[str] = None) -> ValidDataset:
+def frombin(__data: str, __dtype: str = "s", num: Optional[int] = None, encoding: Optional[str] = None) -> ValidDataset:
     ...
 
 
-def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1, *, encoding: Optional[str] = None) -> ValidDataset:
+def frombin(
+    __data: Bitcode,
+    __dtype: SupportedDataType | bytes,
+    num: int = 1,
+    *,
+    encoding: Optional[str] = None,
+    signed: bool = True,
+) -> ValidDataset:
     """converts a string of 0 and 1 back into the original data
 
     Args:
@@ -81,27 +110,62 @@ def frombin(data: Bitcode, dtype: SupportedDataType, num: int = 1, *, encoding: 
     Returns:
         Union[int, float, str]: converted data
     """
-    return frombytes(tobytes(data, "bin"), dtype, num, encoding=encoding)
+    if __dtype is int:
+        stop = len(__data)
+        step = stop // num
+        decoded_data = [None] * num
+        for index, i in enumerate(range(0, stop, step)):
+            bindata = __data[i : i + step]
+            decoded_data[index] = int("-%s" % (bindata) if bindata[0] == "1" else bindata, 2)
+
+        return decoded_data if num != 1 else decoded_data[0]
+
+    bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN)
+    if __dtype in ("s", str):
+        return "".join(bytes.decode(bytedata, encoding or config.DEFAULT_STR_FORMAT))
+
+    else:
+        try:
+            decoded_data = list(
+                struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, __dtype), bytedata)
+            )
+            return decoded_data if num != 1 else decoded_data[0]
+        except struct.error:
+            raise TypeError(f"cannot convert byte data to '{__dtype}'")
 
 
 def tobytes(
-    data: ValidDataset, dtype: SupportedDataType, bytelength: Optional[int] = None, *, encoding: Optional[str] = None
+    __data: ValidDataset,
+    __dtype: Optional[SupportedDataType | Bitcode],
+    bytelength: Optional[int] = None,
+    *,
+    encoding: Optional[str] = None,
+    signed: bool = True,
 ) -> bytes:
-    if dtype in ("s", str):
-        if isinstance(data, list):
-            data = "".join(data)
-        bytedata = str.encode(data, encoding or config.DEFAULT_STR_FORMAT)
-    elif dtype == "bin":
-        bytedata = int(data, 2).to_bytes((len(data) + 7) // 8, config.ENDIAN)
-    else:
-        if dtype == float:
-            dtype = config.DEFAULT_FLOAT_FORMAT
-        elif dtype == int:
-            dtype = config.DEFAULT_INT_FORMAT
 
-        if not isinstance(data, Iterable):
-            data = [data]
-        bytedata = struct.pack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", len(data), dtype), *data)
+    if __dtype in ("s", str):
+        bytedata = str.encode(__data, encoding or config.DEFAULT_STR_FORMAT)
+
+    elif __dtype == "bin":
+        bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN, signed=signed)
+
+    elif __dtype == int:
+        bytedata = int.to_bytes(__data, (__data.bit_length() + 7) // 8, config.ENDIAN, signed=signed)
+
+    else:
+        if __dtype == float:
+            __dtype = config.DEFAULT_FLOAT_FORMAT
+
+        else:
+            try:
+                config.CTYPE_INT_DTYPE_BITSIZE[__dtype]
+            except KeyError:
+                raise TypeError(f"invalid data type: {__dtype}")
+
+        if isinstance(__data, Iterable):
+            bytedata = struct.pack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", len(__data), __dtype), *__data)
+        else:
+            bytedata = struct.pack("%s%s" % (">" if config.ENDIAN == "big" else "<", __dtype), __data)
 
     encoded_bytelen = len(bytedata)
 
@@ -109,6 +173,8 @@ def tobytes(
         return bytedata
 
     elif bytelength == -1:
+        if signed:
+            return bytes(1) + bytedata.lstrip(bytes(1))
         return bytedata.lstrip(bytes(1))
 
     elif encoded_bytelen > bytelength:
@@ -117,18 +183,25 @@ def tobytes(
             raise ValueError(f"data's bytelength({actual_binlen}) is longer than the given bytelength({bytelength})")
         bytedata = bytedata.removeprefix(bytes(1) * (encoded_bytelen - bytelength))
 
-    elif bytedata < bytelength:
-        bytedata = bytes(bytelength) + bytedata
+    elif encoded_bytelen < bytelength:
+        bytedata = bytes(bytelength - encoded_bytelen) + bytedata
 
     return bytedata
 
 
-def frombytes(data: bytes, dtype: SupportedDataType, num: int = 1, *, encoding: Optional[str] = None) -> ValidDataset:
+def frombytes(
+    __data: bytes,
+    __dtype: SupportedDataType | Bitcode,
+    num: int = 1,
+    *,
+    encoding: Optional[str] = None,
+    signed: bool = True,
+) -> ValidDataset:
     """converts a string of 0 and 1 back into the original data
 
     Args:
-        data (BinaryCode): a string of 0 and 1
-        dtype (Union[int, float, str]): the desired data type to convert to
+        __data (BinaryCode): a string of 0 and 1
+        __dtype (Union[int, float, str]): the desired data type to convert to
 
     Raises:
         TypeError: if the desired datatype is not of the integer, floats or strings data type
@@ -137,103 +210,81 @@ def frombytes(data: bytes, dtype: SupportedDataType, num: int = 1, *, encoding: 
         Union[int, float, str]: converted data
     """
 
-    if dtype is int:
-        stop = len(data)
+    if __dtype is int:
+        stop = len(__data)
         step = stop // num
-        return [int.from_bytes(data[i : i + step], config.ENDIAN) for i in range(0, stop, step)]
+        decoded_data = [
+            int.from_bytes(__data[i : i + step], config.ENDIAN, signed=signed) for i in range(0, stop, step)
+        ]
+        return decoded_data if num != 1 else decoded_data[0]
 
-    if dtype in ("s", str):
-        return "".join(bytes.decode(data, encoding or config.DEFAULT_STR_FORMAT))
+    if __dtype in ("s", str):
+        return "".join(bytes.decode(__data, encoding or config.DEFAULT_STR_FORMAT))
 
-    elif dtype == "bin":
-        return "".join("{:08b}".format(b) for b in data)
+    elif __dtype == "bin":
+        return "".join("{:08b}".format(b) for b in __data)
 
     else:
         try:
-            decoded_data = list(struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, dtype), data))
+            decoded_data = list(
+                struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, __dtype), __data)
+            )
             return decoded_data if num != 1 else decoded_data[0]
         except struct.error:
-            raise TypeError(f"cannot convert byte data to '{dtype}'")
+            raise TypeError(f"cannot convert byte data to '{__dtype}'")
 
 
-import re
+def xsplit(
+    __s: str,
+    delimiter: Optional[List[str] | str] = None,
+    index: Optional[List[int] | int] = None,
+    *,
+    continuous: bool = False,
+) -> List[str]:
+    def findall(__s, __sub_s: str | Sequence[str]) -> List[Tuple[int, int]]:
+        if not isinstance(__sub_s, (list, tuple)):
+            __sub_s = [__sub_s]
+        return [mo.span() for sub_s in __sub_s for mo in re.finditer(f"({sub_s})", __s)]
 
+    if (index is None and delimiter is None) or (index != None and delimiter != None):
+        raise ValueError("either an index or a delimiter is required")
 
-class Bitstring(str):
-    def __new__(cls, b: Bitcode) -> "Bitstring":
-        if isinstance(b, str) and not all(s in ("0", "1") for s in b):
-            raise ValueError(f"{cls.__name__} should only be given 0s and 1s")
-        return super().__new__(cls, b)
+    if not delimiter and not isinstance(index, Iterable):
+        index = [index]
 
-    @classmethod
-    def frombytes(cls, b: bytes) -> "Bitstring":
-        return cls("".join("{:08b}".format(b_data) for b_data in b))
+    to_process = deque(findall(__s, delimiter) if not index else index)
+    prev_index = 0
+    sections = []
 
-    def tobytes(self) -> bytearray:
-        return int(self, 2).to_bytes((len(self) + 7) // 8, byteorder=config.ENDIAN)
-
-    def findall(self, s: "Bitstring" | Sequence["Bitstring"]) -> List[Tuple[int, int]]:
-        if not isinstance(s, (list, tuple)):
-            s = [s]
-        return [mo.span() for sub_s in s for mo in re.finditer(f"({sub_s})", self)]
-
-    def append(self, s: "Bitstring") -> "Bitstring":
-        return type(self)(self + s)
-
-    def insert(self, i: int, s: "Bitstring") -> "Bitstring":
-        return type(self)(self[:i] + s + self[i:])
-
-    def split(
-        self,
-        delimiter: Optional[List[Bitcode] | Bitcode] = None,
-        index: Optional[List[int] | int] = None,
-        continuous: bool = False,
-    ) -> List["Bitstring"]:
-        if (index is None and delimiter is None) or (index != None and delimiter != None):
-            raise ValueError("either an index or a delimiter is required")
-
-        if not delimiter and not isinstance(index, Iterable):
-            index = [index]
-
-        to_process = deque(self.findall(delimiter) if not index else index)
-        prev_index = 0
-        sections = []
-
-        if index:
-            while to_process:
-                curr_index = to_process.popleft()
-
-                section_to_append = self[:curr_index]
-
-                if continuous:
-                    self = self[curr_index:]
-                    prev_index = 0
-
-                sections.append(section_to_append[prev_index:])
-                prev_index = curr_index
-
-            last_section = self[prev_index:] if not continuous else self
-            sections.append(last_section)
-            return sections
-
+    if index:
         while to_process:
-            left_end, right_start = to_process.popleft()
+            curr_index = to_process.popleft()
 
-            section_to_append = self[:left_end]
+            section_to_append = __s[:curr_index]
 
             if continuous:
-                self = self[right_start:]
+                __s = __s[curr_index:]
                 prev_index = 0
 
             sections.append(section_to_append[prev_index:])
-            prev_index = right_start
+            prev_index = curr_index
 
-        last_section = self[prev_index:] if not continuous else self
+        last_section = __s[prev_index:] if not continuous else __s
         sections.append(last_section)
         return sections
 
-    def __getitem__(self, __i: int | slice) -> str:
-        return type(self)(super().__getitem__(__i))
+    while to_process:
+        left_end, right_start = to_process.popleft()
 
-    def __repr__(self) -> str:
-        return "%s(%s)" % (type(self).__name__, self)
+        section_to_append = __s[:left_end]
+
+        if continuous:
+            __s = __s[right_start:]
+            prev_index = 0
+
+        sections.append(section_to_append[prev_index:])
+        prev_index = right_start
+
+    last_section = __s[prev_index:] if not continuous else __s
+    sections.append(last_section)
+    return sections
