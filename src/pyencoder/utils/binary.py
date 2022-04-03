@@ -113,11 +113,13 @@ def frombin(
     if __dtype is int:
         stop = len(__data)
         step = stop // num
-        decoded_data = [None] * num
-        for index, i in enumerate(range(0, stop, step)):
-            bindata = __data[i : i + step]
-            decoded_data[index] = int("-%s" % (bindata) if bindata[0] == "1" else bindata, 2)
-
+        if signed:
+            decoded_data = [None] * num
+            for index, i in enumerate(range(0, stop, step)):
+                bindata = __data[i : i + step]
+                decoded_data[index] = int("-%s" % (bindata) if bindata[0] == "1" else bindata, 2)
+        else:
+            decoded_data = [int(__data[i : i + step], 2) for i in range(0, stop, step)]
         return decoded_data if num != 1 else decoded_data[0]
 
     bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN)
@@ -147,7 +149,7 @@ def tobytes(
         bytedata = str.encode(__data, encoding or config.DEFAULT_STR_FORMAT)
 
     elif __dtype == "bin":
-        bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN, signed=signed)
+        bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN)
 
     elif __dtype == int:
         bytedata = int.to_bytes(__data, (__data.bit_length() + 7) // 8, config.ENDIAN, signed=signed)

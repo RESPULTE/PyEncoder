@@ -2,6 +2,8 @@ from bisect import insort_left
 from collections import Counter
 from typing import BinaryIO, Literal, Optional, Type, Tuple, Dict, List, overload
 
+from numpy import isin
+
 from pyencoder import config
 from pyencoder.utils.binary import frombin, frombytes, tobin, tobytes, xsplit
 from pyencoder.type_hints import (
@@ -41,14 +43,15 @@ def decode(
     length_encoding: bool = False,
 ) -> ValidDataset:
 
-    if length_encoding and dtype not in ("s", "f", "d", str, float):
-        dtype = int
-
     decoded_data = [None] * len(encoded_data)
     to_process = encoded_data
     curr_index = 0
     curr_code = ""
+
     if length_encoding:
+        if dtype not in ("s", "f", "d", str, float):
+            dtype = int
+
         while to_process:
             curr_code += to_process[:1]
             to_process = to_process[1:]
@@ -77,7 +80,7 @@ def decode(
 
     decoded_data = decoded_data[:curr_index]
 
-    return decoded_data if dtype != "s" else "".join(decoded_data)
+    return decoded_data if dtype not in ("s", str) else "".join(decoded_data)
 
 
 @overload
@@ -101,6 +104,7 @@ def encode(
         codebook = generate_canonical_codebook(dataset)
         encoded_data = "".join([codebook[data] for data in dataset])
         return codebook, encoded_data
+
     if dtype not in ("s", "f", "d", float, str):
         dtype = int
     bin_dataset = [tobin(data, dtype) for data in dataset]
@@ -133,9 +137,7 @@ def dump(
     sof_marker = tobin(sof_marker or config.SOF_MARKER, config.MARKER_DTYPE, bitlength=config.MARKER_BITSIZE)
     eof_marker = tobin(eof_marker or config.EOF_MARKER, config.MARKER_DTYPE, bitlength=config.MARKER_BITSIZE)
 
-    bin_data = tobytes(
-        sof_marker + header_size + codelengths + symbols + encoded_data + eof_marker, "bin", signed=False
-    )
+    bin_data = tobytes(sof_marker + header_size + codelengths + symbols + encoded_data + eof_marker, "bin")
     file.write(bin_data)
 
     return bin_data
@@ -211,12 +213,16 @@ def generate_codebook_from_dataset(dataset: ValidDataset) -> Dict[ValidDataType,
             codebook[sym_1] += 1
         for sym_2 in symbol_2:
             codebook[sym_2] += 1
+    else:
+        if len(codebook) == 1:
+            return {k: v + 1 for k, v in codebook.items()}
 
     return codebook
 
 
 def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bitcode]:
     codebook = generate_codebook_from_dataset(dataset)
+
     # just to ensure that the very first value will be zero
     curr_code = -1
     # making sure that the bit shift won't ever happen for the first value
@@ -255,13 +261,15 @@ def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> 
                 f"number of symbols decoded({num_codelength}) does not match the default values({config.MAX_CODELENGTH})"
             )
         symbols = frombin(bin_symbols, dtype, num=sum(num_symbols_per_codelength))
-
+        if not isinstance(symbols, list):
+            symbols = [symbols]
     except (IndexError, ValueError) as err:
         raise CorruptedHeaderError("Header cannot be decoded") from err
 
     codebook = {}
     curr_code = 0
     curr_sym_index = 0
+
     for bitlength, num in enumerate(num_symbols_per_codelength, start=1):
 
         for _ in range(num):
@@ -273,13 +281,3 @@ def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> 
         curr_code = curr_code << 1
 
     return codebook
-
-
-import random
-
-b = [random.randint(-1000, 1000) for _ in range(100)]
-with open("f", "wb") as f:
-    dump(b, "h", f, length_encoding=True)
-
-with open("f", "rb") as f:
-    print(load(f, "h", length_encoding=True) == b)
