@@ -2,7 +2,7 @@ from heapq import heappop, heappush, heapify
 from collections import Counter
 from typing import BinaryIO, Literal, Optional, Type, Tuple, Dict, List, overload
 
-from pyencoder import config
+from pyencoder.HuffmanCoding import config
 from pyencoder.utils.binary import frombin, frombytes, tobin, tobytes
 from pyencoder.type_hints import (
     CorruptedHeaderError,
@@ -194,6 +194,7 @@ def generate_header_from_codebook(
 def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidDataType, Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     counted_dataset = Counter(dataset).most_common()
+
     # [(frequency, max_bitlength, symbol)]
     to_process = [(count, 1, [symbol]) for symbol, count in counted_dataset]
     codebook = {symbol: 0 for symbol, _ in counted_dataset}
@@ -250,7 +251,7 @@ def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bi
         if bitlength > prev_bitlength:
             curr_code = curr_code << (bitlength - prev_bitlength)
 
-        canonical_codebook[symbol] = tobin(curr_code, "I", bitlength=bitlength)
+        canonical_codebook[symbol] = tobin(curr_code, "H", bitlength=bitlength)
         prev_bitlength = bitlength
 
     return canonical_codebook

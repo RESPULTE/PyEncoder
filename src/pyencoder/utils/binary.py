@@ -1,10 +1,6 @@
-import re
 import struct
-from collections import deque
-from turtle import right
 from typing import List, Iterable, Optional, Sequence, Tuple, Type, Union, overload
 
-from numpy import isin
 
 from pyencoder import config
 from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
@@ -38,14 +34,10 @@ def tobin(
         if not isinstance(__data, Iterable):
             __data = [__data]
 
-        bindata = [None] * len(__data)
         if signed:
-            for index, d in enumerate(__data):
-                b = bin(d)
-                b = "0" + b[2:] if d >= 0 else b[3:]
-                bindata[index] = b
+            bindata = (b if (b := bin(d).split("0b")) < 0 else "0" + b for d in __data)
         else:
-            bindata = (bin(d)[2:] for d in __data)
+            bindata = (bin(d).split("0b")[1] for d in __data)
 
     else:
         if not isinstance(__data, bytes):
