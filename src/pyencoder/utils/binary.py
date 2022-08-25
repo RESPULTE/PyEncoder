@@ -1,9 +1,8 @@
 import struct
 from typing import List, Iterable, Optional, Sequence, Tuple, Type, Union, overload
 
-
 from pyencoder import config
-from pyencoder.type_hints import Bitcode, ValidDataType, ValidDataset, SupportedDataType
+from pyencoder.type_hints import Bitcode, ValidData, ValidDataset, SupportedDataType
 
 
 @overload

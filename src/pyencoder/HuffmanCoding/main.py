@@ -8,7 +8,7 @@ from pyencoder.type_hints import (
     CorruptedHeaderError,
     CorruptedEncodingError,
     SupportedDataType,
-    ValidDataType,
+    ValidData,
     ValidDataset,
     Bitcode,
 )
@@ -35,7 +35,7 @@ def decode(
 
 
 def decode(
-    codebook: Dict[ValidDataType, Bitcode],
+    codebook: Dict[ValidData, Bitcode],
     encoded_data: Bitcode,
     dtype: SupportedDataType,
     length_encoding: bool = False,
@@ -97,7 +97,7 @@ def encode(dataset: List[float | int], dtype: Type[float] | Type[int] | Type[str
 
 def encode(
     dataset: ValidDataset, dtype: Optional[SupportedDataType], length_encoding: bool = False
-) -> Tuple[Dict[ValidDataType, Bitcode], Bitcode]:
+) -> Tuple[Dict[ValidData, Bitcode], Bitcode]:
     if not length_encoding:
         codebook = generate_canonical_codebook(dataset)
         encoded_data = "".join([codebook[data] for data in dataset])
@@ -122,8 +122,8 @@ def dump(
     file: BinaryIO,
     *,
     length_encoding: bool = False,
-    sof_marker: Optional[ValidDataType] = None,
-    eof_marker: Optional[ValidDataType] = None,
+    sof_marker: Optional[ValidData] = None,
+    eof_marker: Optional[ValidData] = None,
 ) -> None:
     codebook, encoded_data = encode(dataset, dtype=dtype, length_encoding=length_encoding)
 
@@ -147,8 +147,8 @@ def load(
     dtype: SupportedDataType,
     *,
     length_encoding: bool = False,
-    sof_marker: Optional[ValidDataType] = None,
-    eof_marker: Optional[ValidDataType] = None,
+    sof_marker: Optional[ValidData] = None,
+    eof_marker: Optional[ValidData] = None,
 ) -> ValidDataset:
     raw_bindata = frombytes(file.read(), "bin")
 
@@ -177,7 +177,7 @@ def load(
 
 
 def generate_header_from_codebook(
-    codebook: Dict[ValidDataType, Bitcode], dtype: SupportedDataType
+    codebook: Dict[ValidData, Bitcode], dtype: SupportedDataType
 ) -> Tuple[Bitcode, Bitcode]:
     codelengths = ["0" * config.CODELENGTH_BITSIZE for _ in range(config.MAX_CODELENGTH)]
     counted_codelengths = Counter([len(code) for code in codebook.values()])
@@ -191,7 +191,7 @@ def generate_header_from_codebook(
     return codelengths, symbols
 
 
-def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidDataType, Bitcode]:
+def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidData, Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     counted_dataset = Counter(dataset).most_common()
 
@@ -232,7 +232,7 @@ def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidDa
     return codebook
 
 
-def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bitcode]:
+def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidData, Bitcode]:
     codebook = generate_codebook_from_dataset(dataset)
 
     # just to ensure that the very first value will be zero
@@ -257,7 +257,7 @@ def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidDataType, Bi
     return canonical_codebook
 
 
-def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidDataType]:
+def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidData]:
     try:
         codelength_info = config.CODELENGTH_BITSIZE * config.MAX_CODELENGTH
         bin_codelengths, bin_symbols = header[:codelength_info], header[codelength_info:]
