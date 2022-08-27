@@ -1,8 +1,8 @@
 from bisect import bisect_left
 from typing import BinaryIO, TextIO
 
-import pyencoder.ArithmeticCoding.config as config
 import pyencoder.config as main_config
+import pyencoder.ArithmeticCoding.config as config
 
 from pyencoder.bufferedbitIO import BufferedBitInput, BufferedBitOutput
 from pyencoder.ArithmeticCoding.codebook import AdaptiveArithmeticCodebook
@@ -26,14 +26,14 @@ def load(input_file: TextIO, output_file: BinaryIO = None) -> None:
 
         sym = codebook.get_symbol(scaled_code_value)
         sym_low, sym_high = codebook.get_probability(sym)
-        codebook[sym] += 1
 
         if sym == main_config.EOF_MARKER:
             break
 
         output_file.write(sym)
-        upper_limit = lower_limit + (sym_high * current_range // codebook.total_symbols) - 1
-        lower_limit = lower_limit + (sym_low * current_range // codebook.total_symbols)
+        upper_limit = lower_limit + ((sym_high * current_range) // codebook.total_symbols) - 1
+        lower_limit = lower_limit + ((sym_low * current_range) // codebook.total_symbols)
+        codebook[sym] += 1
 
         while True:
 
@@ -73,20 +73,23 @@ def dump(input_file: TextIO, output_file: BinaryIO) -> None:
     lower_limit = 0
     upper_limit = config.FULL_RANGE_BITMASK
 
+    encoding = True
     num_pending_bits = 0
 
-    while True:
+    while encoding:
 
         sym = input_file.read(1)
+
         if not sym:
-            break
+            sym = main_config.EOF_MARKER
+            encoding = False
 
         sym_low, sym_high = codebook.get_probability(sym)
-        codebook[sym] += 1
 
         current_range = upper_limit - lower_limit + 1
-        upper_limit = lower_limit + (sym_high * current_range // codebook.total_symbols) - 1
-        lower_limit = lower_limit + (sym_low * current_range // codebook.total_symbols)
+        upper_limit = lower_limit + ((sym_high * current_range) // codebook.total_symbols) - 1
+        lower_limit = lower_limit + ((sym_low * current_range) // codebook.total_symbols)
+        codebook[sym] += 1
 
         while True:
             if upper_limit < config.HALF_RANGE:

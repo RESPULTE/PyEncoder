@@ -18,7 +18,7 @@ def test_adaptive_codebook_symbol_count_increment(StringData: str) -> None:
     for sym in StringData:
         codebook[sym] += 1
 
-    for sym in codebook._all_symbols:
+    for sym, _ in codebook.symbol_catalogue:
         codebook[sym] -= 1
 
     actual_catalogue = collections.Counter(StringData).most_common()
@@ -26,26 +26,23 @@ def test_adaptive_codebook_symbol_count_increment(StringData: str) -> None:
 
 
 def test_adaptive_codebook_symbol_search(adaptive_codebook: AC.codebook.AdaptiveArithmeticCodebook) -> None:
-    for sym in adaptive_codebook._all_symbols:
-        adaptive_codebook[sym] -= 1
-
-    for i in range(adaptive_codebook.total_symbols):
+    for i in range(1, adaptive_codebook.total_symbols, 2):
         sym = adaptive_codebook.get_symbol(i)
         sym_low, sym_high = adaptive_codebook.get_probability(sym)
-        assert sym_low <= i < sym_high
+        assert sym_low <= i <= sym_high
 
 
 def test_dump_and_load(StringData: str) -> None:
-    txt_file = tempfile.TemporaryFile(mode="r+")
-    with txt_file as input_file:
-        input_file.write(StringData)
-        input_file.flush()
-        input_file.seek(0)
+    with tempfile.TemporaryFile(mode="r+") as txt_file:
+        txt_file.write(StringData)
+        txt_file.flush()
+        txt_file.seek(0)
 
-        with tempfile.TemporaryFile(mode="r+b") as output_file:
-            AC.dump(input_file, output_file)
-            output_file.seek(0)
+        with tempfile.TemporaryFile(mode="r+b") as encoded_file:
+            AC.dump(txt_file, encoded_file)
+            encoded_file.seek(0)
 
-            input_file = output_file
-            with tempfile.TemporaryFile(mode="r+") as output_file:
-                AC.load(input_file, output_file)
+            with tempfile.TemporaryFile(mode="r+") as decoded_file:
+                AC.load(encoded_file, decoded_file)
+
+                assert decoded_file.read() == txt_file.read()

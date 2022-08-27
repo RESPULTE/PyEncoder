@@ -1,6 +1,6 @@
 # -----------------------------------------------MARKER CONFIGS--------------------------------------------------
 SOF_MARKER = "辣"
-EOF_MARKER = "柳"
+EOF_MARKER = "我"
 
 MARKER_DTYPE = "s"
 MARKER_BITSIZE = 24

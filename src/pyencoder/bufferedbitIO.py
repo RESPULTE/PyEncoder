@@ -34,14 +34,9 @@ class BufferedBitOutput:
         self.file_obj.write(bytes_to_output)
 
     def flush(self) -> None:
-        if self.buffered_size == 0:
-            return
-
-        elif self.buffered_size < self.bit_buffer_size:
-            self.buffered_bits = self.buffered_bits[::-1]
-
-        bytes_to_output = int.to_bytes(int(self.buffered_bits, 2), self.byte_buffer_size, ENDIAN)
-        self.file_obj.write(bytes_to_output)
+        if self.buffered_size != 0:
+            bytes_to_output = int.to_bytes(int(self.buffered_bits, 2), -(-self.buffered_size // 8), ENDIAN)
+            self.file_obj.write(bytes_to_output)
 
         self.buffered_bits = ""
         self.buffered_size = 0
