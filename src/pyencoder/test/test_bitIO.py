@@ -1,4 +1,4 @@
-from pyencoder import bufferedbitIO
+from pyencoder.utils.BitIO import BufferedBitInput, BufferedBitOutput
 import tempfile
 import pytest
 
@@ -8,7 +8,7 @@ def test_bit_read_iter(StringData: str) -> None:
         tmp.write(StringData.encode("utf-8"))
         tmp.seek(0)
 
-        reader = bufferedbitIO.BufferedBitInput(tmp)
+        reader = BufferedBitInput(tmp)
 
         buffer = 0
         buffer_size = 0
@@ -31,7 +31,7 @@ def test_bit_read(StringData: str, numbit: int) -> None:
         tmp.write(StringData.encode("ascii"))
         tmp.seek(0)
 
-        reader = bufferedbitIO.BufferedBitInput(tmp)
+        reader = BufferedBitInput(tmp)
 
         buffer_size = 0
         buffer = ""
@@ -53,7 +53,7 @@ def test_bit_read(StringData: str, numbit: int) -> None:
 
 def test_bit_write(StringData) -> None:
     with tempfile.TemporaryFile() as tmp:
-        writer = bufferedbitIO.BufferedBitOutput(tmp)
+        writer = BufferedBitOutput(tmp)
         for s in StringData:
             writer.write(bin(ord(s))[2:].zfill(8))
         writer.flush()

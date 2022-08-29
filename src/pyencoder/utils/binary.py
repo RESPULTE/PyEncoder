@@ -229,6 +229,28 @@ def frombytes(
             raise TypeError(f"cannot convert byte data to '{__dtype}'")
 
 
+def left_shift(num: int, start: int, end: int) -> int:
+    to_shift = num.bit_length() - end
+
+    try:
+        to_clamp = (1 << (end - start + 1)) - 1
+        return (num >> to_shift) & to_clamp
+
+    except ValueError as err:
+        raise ValueError("invalid start or end index") from err
+
+
+def right_shift(num: int, start: int, end: int) -> int:
+    to_shift = start
+
+    try:
+        to_clamp = (1 << (end - start + 1)) - 1
+        return (num >> to_shift) & to_clamp
+
+    except ValueError as err:
+        raise ValueError("invalid start or end index") from err
+
+
 # def xsplit(
 #     __s: str,
 #     delimiter: Optional[List[str] | str] = None,

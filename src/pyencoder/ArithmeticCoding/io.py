@@ -4,7 +4,7 @@ from typing import BinaryIO, TextIO
 import pyencoder.config as main_config
 import pyencoder.ArithmeticCoding.config as config
 
-from pyencoder.bufferedbitIO import BufferedBitInput, BufferedBitOutput
+from pyencoder.utils.BitIO import BufferedBitInput, BufferedBitOutput
 from pyencoder.ArithmeticCoding.codebook import AdaptiveArithmeticCodebook
 
 
