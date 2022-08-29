@@ -3,7 +3,7 @@ import tempfile
 import pytest
 
 
-def test_bit_read_iter(StringData: str) -> None:
+def test_str_read_iter(StringData: str) -> None:
     with tempfile.TemporaryFile() as tmp:
         tmp.write(StringData.encode("utf-8"))
         tmp.seek(0)
@@ -25,8 +25,29 @@ def test_bit_read_iter(StringData: str) -> None:
     assert "".join(output) == StringData
 
 
-@pytest.mark.parametrize("numbit", [1, 2, 7, 11, 21], ids=["basic", "even", "odd", "greater than 8", "very big"])
-def test_bit_read(StringData: str, numbit: int) -> None:
+def test_int_read_iter(StringData: str) -> None:
+    with tempfile.TemporaryFile() as tmp:
+        tmp.write(StringData.encode("utf-8"))
+        tmp.seek(0)
+
+        reader = BufferedBitInput(tmp, as_int=True)
+
+        buffer = 0
+        buffer_size = 0
+        output = []
+        for i in reader:
+            buffer = (buffer << 1) | i
+            buffer_size += 1
+
+            if buffer_size == 8:
+                output.append(chr(buffer))
+                buffer_size = 0
+                buffer = 0
+
+    assert "".join(output) == StringData
+
+
+def test_str_read(StringData: str) -> None:
     with tempfile.TemporaryFile() as tmp:
         tmp.write(StringData.encode("ascii"))
         tmp.seek(0)
@@ -37,15 +58,44 @@ def test_bit_read(StringData: str, numbit: int) -> None:
         buffer = ""
         output = []
         while True:
-            new_bit = reader.read(numbit)
+            new_bit = reader.read()
             if not new_bit:
                 break
+
             buffer += new_bit
-            buffer_size += numbit
+            buffer_size += 1
 
             if buffer_size >= 8:
                 buffer, symbol_bits = buffer[8:], buffer[:8]
                 output.append(chr(int(symbol_bits, 2)))
+                buffer_size -= 8
+
+    assert "".join(output) == StringData
+
+
+def test_int_read(StringData: str) -> None:
+    with tempfile.TemporaryFile() as tmp:
+        tmp.write(StringData.encode("ascii"))
+        tmp.seek(0)
+
+        reader = BufferedBitInput(tmp, as_int=True)
+
+        buffer_size = 0
+        buffer = 0
+        output = []
+        while True:
+            new_bit = reader.read()
+            if new_bit == None:
+                break
+
+            buffer = (buffer << 1) | new_bit
+            buffer_size += 1
+
+            if buffer_size >= 8:
+                i = buffer_size - 8
+                symbol_bits = (buffer & (((1 << 8) - 1) << i)) >> i
+                buffer = buffer & ((1 << i) - 1)
+                output.append(chr(symbol_bits))
                 buffer_size -= 8
 
     assert "".join(output) == StringData

@@ -15,10 +15,10 @@ def load(input_file: TextIO, output_file: BinaryIO = None) -> None:
     code_values = 0
     upper_limit = config.FULL_RANGE_BITMASK
 
-    bitstream = BufferedBitInput(input_file, config.PRECISION // 8)
+    bitstream = BufferedBitInput(input_file, config.PRECISION // 8, as_int=True)
 
-    for i in bitstream.read(config.PRECISION):
-        code_values = (code_values << 1) + int(i)
+    for i in range(config.PRECISION):
+        code_values = (code_values << 1) + i
 
     while True:
         current_range = upper_limit - lower_limit + 1
@@ -61,9 +61,7 @@ def load(input_file: TextIO, output_file: BinaryIO = None) -> None:
             lower_limit = lower_limit << 1
             upper_limit = (upper_limit << 1) + 1
 
-            next_bit = bitstream.read(1) or 0
-
-            code_values = (code_values << 1) + int(next_bit)
+            code_values = (code_values << 1) + bitstream.read()
 
 
 def dump(input_file: TextIO, output_file: BinaryIO) -> None:

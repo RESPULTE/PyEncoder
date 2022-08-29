@@ -244,7 +244,7 @@ def right_shift(num: int, start: int, end: int) -> int:
     to_shift = start
 
     try:
-        to_clamp = (1 << (end - start + 1)) - 1
+        to_clamp = (1 << (end - start)) - 1
         return (num >> to_shift) & to_clamp
 
     except ValueError as err:
