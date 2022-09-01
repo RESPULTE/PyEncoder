@@ -1,7 +1,7 @@
 from typing import Dict, Tuple
 
 import pyencoder.config as main_config
-from pyencoder.type_hints import Bitcode, ValidData, ValidDataset, SupportedDataType
+from pyencoder.type_hints import Bitcode, ValidData, ValidDataset
 
 import pyencoder.ArithmeticCoding.config as config
 from pyencoder.ArithmeticCoding.codebook import ArithmeticCodebook

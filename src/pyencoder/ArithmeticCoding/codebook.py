@@ -1,14 +1,10 @@
-import string
 import bisect
 import itertools
-import functools
 import collections
 from typing import List, OrderedDict, Tuple
 
 from pyencoder.type_hints import ValidData, ValidDataset
 import pyencoder.config as main_config
-
-SYMBOLS = string.printable + main_config.EOF_MARKER
 
 
 class ArithmeticCodebook(dict):
@@ -43,7 +39,7 @@ class ArithmeticCodebook(dict):
 # * IMPLEMENT 'lru_cache' FOR 'calculate_symbol_probability_bounds'
 class AdaptiveArithmeticCodebook:
     def __init__(self):
-        self._symbol_catalogue = OrderedDict({k: 1 for k in SYMBOLS})
+        self._symbol_catalogue = OrderedDict({k: 1 for k in main_config.SYMBOLS})
         self._symbol_counts = self._symbol_catalogue.values()
 
         self.calculate_symbol_probability_bounds = itertools.accumulate
@@ -62,10 +58,10 @@ class AdaptiveArithmeticCodebook:
 
     def get_symbol(self, probability: int) -> str:
         index = bisect.bisect_right(self.symbol_probability_bounds, probability) - 1
-        return SYMBOLS[index]
+        return main_config.SYMBOLS[index]
 
     def get_probability(self, symbol: str) -> Tuple[int, int]:
-        index = SYMBOLS.index(symbol)
+        index = main_config.SYMBOLS.index(symbol)
         return tuple(self.symbol_probability_bounds[index : index + 2])
 
     def __setitem__(self, symbol: str, count: int) -> None:
