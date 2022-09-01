@@ -1,3 +1,4 @@
+import collections
 import pyencoder.HuffmanCoding.codebook as hc
 import uuid
 import pytest
@@ -12,16 +13,16 @@ def completed_tree(StringData) -> hc.AdaptiveHuffmanTree:
     return tree
 
 
-def test_swap_node() -> None:
+def test_relocate_node() -> None:
     uid = uuid.uuid1
 
     # None for all cuz they wont be compared
-    parent_1 = hc.HuffmanNode(None, None, None, None)
-    parent_2 = hc.HuffmanNode(None, None, None, None)
+    parent_1 = hc.HuffmanNode(None, 1000, None, None)
+    parent_2 = hc.HuffmanNode(None, 1000, None, None)
 
     # using uuid cuz the type of them doesn't matter
     symbol_1, symbol_2 = uid(), uid()
-    weight_1, weight_2 = uid(), uid()
+    weight_1, weight_2 = 100, 120
     order_1, order_2 = uid(), uid()
     child_l1, child_r1 = uid(), uid()
     child_l2, child_r2 = uid(), uid()
@@ -33,7 +34,7 @@ def test_swap_node() -> None:
     parent_1.left = node_1
     parent_2.right = node_2
 
-    hc.AdaptiveHuffmanTree.swap_node(node_1, node_2)
+    hc.AdaptiveHuffmanTree.relocate_node(node_1, node_2)
 
     # check parent correctness
     assert node_1.parent is parent_2 and node_2.parent is parent_1
@@ -82,13 +83,10 @@ def test_get_code() -> None:
     assert hc.AdaptiveHuffmanTree.get_code(n5) == "1011"
 
 
-def test_encode(StringData: str, completed_tree: hc.AdaptiveHuffmanTree) -> None:
-    # test for parent to child relation correctness
-    # test for child to parent relation correctness
-    # test for symbol's count correctness
-    # test for node's weight correctness
-    # test for node's order correctness
-    ...
+def test_symbol_weight_correctness(StringData: int, completed_tree: hc.AdaptiveHuffmanTree) -> None:
+    for sym, count in collections.Counter(StringData).most_common():
+        node = completed_tree.symbol_catalogue[sym]
+        assert node.weight == count
 
 
 def test_set_node_weight() -> None:
@@ -98,7 +96,7 @@ def test_set_node_weight() -> None:
     tree.weight_catalogue[2] = [hc.HuffmanNode(None, 2, 224), hc.HuffmanNode(None, 2, 250)]
     tree.weight_catalogue[1] = [node]
 
-    tree.set_node_weight(node, 2)
+    tree.increment_node_weight(node)
 
     assert tree.weight_catalogue[2][1] is node
 

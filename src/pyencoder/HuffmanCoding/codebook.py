@@ -39,15 +39,11 @@ class HuffmanNode:
 
     @property
     def is_leaf(self) -> bool:
-        return not (self.left or self.right)
+        return self.symbol is not None and self.weight > 0
 
     @property
     def is_root(self) -> bool:
-        return self.parent is None
-
-    @property
-    def is_valid(self) -> bool:
-        return self.symbol is not None or self.weight > 0
+        return self.parent is None and self.symbol is None and self.weight > 0
 
     def __gt__(self, other: "HuffmanNode") -> bool:
         if self.order > other.order:
@@ -72,7 +68,7 @@ class AdaptiveHuffmanTree:
     def __init__(self) -> None:
         self.symbol_catalogue: Dict[str, HuffmanNode] = {}
         self.weight_catalogue: OrderedDict[int, List[HuffmanNode]] = OrderedDict({1: []})
-        self.order_index = 2 * FIXED_CODE_SIZE - 1
+        self.order_index = 2 * main_config.NUM_SYMBOLS - 1
 
         self.root = self.NYT = HuffmanNode(None, 0, self.order_index)
 
@@ -80,70 +76,51 @@ class AdaptiveHuffmanTree:
         if symbol in self.symbol_catalogue:
             node = self.symbol_catalogue[symbol]
             huffman_code = self.get_code(node)
-            self.update(node.parent)
-
+            self.update(node, initial=False)
             return huffman_code
 
         node = self.create_node(symbol)
         huffman_code = self.get_code(self.NYT) + FIXED_CODE_LOOKUP[symbol]
-        self.update(node.parent)
+        self.update(node.parent, initial=True)
 
         return huffman_code
 
-    def update_node_weight(self, node: HuffmanNode) -> None:
-        def recursive_weight_getter(node: HuffmanNode) -> int:
-            weight = 0
-            if node.left and node.left.is_valid:
-                weight += recursive_weight_getter(node.left)
-
-            if node.right and node.right.is_valid:
-                weight += recursive_weight_getter(node.right)
-
-            if node.is_leaf:
-                return 1
-
-            elif node.weight != weight:
-                if node.is_branch:
-                    self.set_node_weight(node, weight)
-
-                elif node.is_root:
-                    node.weight = weight
-
-            return weight
-
-        recursive_weight_getter(node)
-
-    def set_node_weight(self, node: HuffmanNode, weight: int) -> None:
+    def increment_node_weight(self, node: HuffmanNode) -> None:
+        # every time a node is promoted, the node is sorted into the list
+        # thus, the list maintains sorted by 'order' at all times
         self.weight_catalogue[node.weight].remove(node)
-        node.weight = weight
-        weight_category = self.weight_catalogue.setdefault(weight, [])
+        node.weight += 1
+        weight_category = self.weight_catalogue.setdefault(node.weight, [])
         bisect.insort(weight_category, node, key=operator.attrgetter("order"))
 
-    def update(self, node: HuffmanNode) -> None:
+    def update(self, node: HuffmanNode, initial: bool) -> None:
         while not node.is_root:
 
             arr = self.weight_catalogue[node.weight]
 
-            if all(arr[i] < arr[i + 1] for i in range(len(arr) - 1)):
-                break
+            # * Note: the list is sorted by 'order' at all times
+            # by definition the order of a child must be smaller than its parent
+            # so if the node with the highest order is the node's parent
+            # the next node with the highest order must be the node and thus no relocation is needed
+            highest_order_node = arr[-1]
+            node_original_parent = node.parent
+            if highest_order_node not in (node, node.parent):
+                self.relocate_node(node, highest_order_node)
 
-            tmp_arr = arr.copy()
+                if initial and node.weight == highest_order_node.weight:
+                    ind_1 = arr.index(node)
+                    ind_2 = arr.index(highest_order_node)
+                    arr[ind_1], arr[ind_2] = arr[ind_2], arr[ind_1]
 
-            if node.parent in tmp_arr:
-                tmp_arr.remove(node.parent)
+            if not initial:
+                self.increment_node_weight(node)
+            elif node_original_parent.is_branch:
+                self.increment_node_weight(node_original_parent)
 
-            highest_order_node = tmp_arr[-1]
-            if node != highest_order_node:
-                self.swap_node(node, highest_order_node)
-
-                if node.weight == highest_order_node.weight:
-                    end_index = len(tmp_arr) - 1
-                    index = end_index - abs(highest_order_node.order - node.order)
-                    arr[index], arr[end_index] = arr[end_index], arr[index]
-
+            initial = False
             node = node.parent
 
-        self.update_node_weight(self.root)
+        # self.update_node_weight(self.root)
 
     def create_node(self, symbol: str) -> HuffmanNode:
         # setting the NYT node as the parent and spawning two new children for it
@@ -182,11 +159,20 @@ class AdaptiveHuffmanTree:
         return code[::-1]
 
     @staticmethod
-    def swap_node(node_1: HuffmanNode, node_2: HuffmanNode) -> None:
-        # updating parent's data
-        node_1.order, node_2.order = node_2.order, node_1.order
-        parent_1, parent_2 = node_1.parent, node_2.parent
+    def relocate_node(node_1: HuffmanNode, node_2: HuffmanNode) -> None:
+        # Things to swap:
+        # 1. node's order
+        # 2. node's parent pointer
+        # 3. node's parent child pointer
 
+        # i) all the children will remain as the node's children, so they dont need to be relocated
+        # ii) weight and symbol is tied to the node, never to be relocated
+        # iii) order needs to be changed as the order doesn't depend on the nodes,
+        #      rather it depend son the position of said nodes
+
+        node_1.order, node_2.order = node_2.order, node_1.order
+
+        parent_1, parent_2 = node_1.parent, node_2.parent
         if parent_1 is parent_2:
             parent_1.left, parent_1.right = parent_1.right, parent_1.left
             return
@@ -194,6 +180,23 @@ class AdaptiveHuffmanTree:
         node_1.parent, node_2.parent = parent_2, parent_1
         setattr(parent_1, "left" if node_1 is parent_1.left else "right", node_2)
         setattr(parent_2, "left" if node_2 is parent_2.left else "right", node_1)
+
+
+def parent_child_relation(completed_tree: AdaptiveHuffmanTree) -> None:
+    def recursive_check(node: HuffmanNode, parent: HuffmanNode):
+        if node.left:
+            assert recursive_check(node.left, node) is True, "invalid child to parent relation"
+        if node.right:
+            assert recursive_check(node.right, node) is True, "invalid child to parent relation"
+
+        if node.parent is not None:
+            assert node in (parent.left, parent.right), "invalid parent to child relation"
+        else:
+            assert not node.is_branch and not node.is_leaf, "invalid root node"
+
+        return node.parent is parent and node.parent not in (node, node.left, node.right)
+
+    return recursive_check(completed_tree.root, None)
 
 
 def generate_header_from_codebook(
