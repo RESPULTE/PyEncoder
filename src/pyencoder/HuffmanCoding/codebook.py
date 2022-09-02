@@ -5,7 +5,7 @@ import dataclasses
 from heapq import heappop, heappush, heapify
 from collections import Counter, OrderedDict
 
-from typing import Any, Iterable, Tuple, Dict, List
+from typing import Any, Generator, Iterable, Tuple, Dict, List
 
 from pyencoder.HuffmanCoding import config
 import pyencoder.config as main_config
@@ -21,6 +21,7 @@ from pyencoder.type_hints import (
 
 FIXED_CODE_SIZE = math.ceil(math.log2(main_config.NUM_SYMBOLS))
 FIXED_CODE_LOOKUP = {k: "{num:0{size}b}".format(num=i, size=FIXED_CODE_SIZE) for i, k in enumerate(main_config.SYMBOLS)}
+FIXED_SYMBOL_LOOKUP = {v: k for k, v in FIXED_CODE_LOOKUP.items()}
 
 
 @dataclasses.dataclass
@@ -72,19 +73,6 @@ class AdaptiveHuffmanTree:
 
         self.root = self.NYT = HuffmanNode(None, 0, self.order_index)
 
-    def encode(self, symbol: str) -> Bitcode:
-        if symbol in self.symbol_catalogue:
-            node = self.symbol_catalogue[symbol]
-            huffman_code = self.get_code(node)
-            self.update(node, initial=False)
-            return huffman_code
-
-        node = self.create_node(symbol)
-        huffman_code = self.get_code(self.NYT) + FIXED_CODE_LOOKUP[symbol]
-        self.update(node.parent, initial=True)
-
-        return huffman_code
-
     def increment_node_weight(self, node: HuffmanNode) -> None:
         # every time a node is promoted, the node is sorted into the list
         # thus, the list maintains sorted by 'order' at all times
@@ -93,7 +81,28 @@ class AdaptiveHuffmanTree:
         weight_category = self.weight_catalogue.setdefault(node.weight, [])
         bisect.insort(weight_category, node, key=operator.attrgetter("order"))
 
-    def update(self, node: HuffmanNode, initial: bool) -> None:
+    def pre_process(self, node: HuffmanNode) -> HuffmanNode:
+        arr = self.weight_catalogue[node.weight]
+
+        # * Note: the list is sorted by 'order' at all times
+        # by definition the order of a child must be smaller than its parent
+        # so if the node with the highest order is the node's parent
+        # the next node with the highest order must be the node and thus no relocation is needed
+        highest_order_node = arr[-1]
+        node_original_parent = node.parent
+        if highest_order_node not in (node, node.parent):
+            self.relocate_node(node, highest_order_node)
+
+            if node.weight == highest_order_node.weight:
+                ind_1 = arr.index(node)
+                ind_2 = arr.index(highest_order_node)
+                arr[ind_1], arr[ind_2] = arr[ind_2], arr[ind_1]
+
+        self.increment_node_weight(node_original_parent)
+
+        return node.parent
+
+    def update(self, node: HuffmanNode) -> None:
         while not node.is_root:
 
             arr = self.weight_catalogue[node.weight]
@@ -103,24 +112,11 @@ class AdaptiveHuffmanTree:
             # so if the node with the highest order is the node's parent
             # the next node with the highest order must be the node and thus no relocation is needed
             highest_order_node = arr[-1]
-            node_original_parent = node.parent
             if highest_order_node not in (node, node.parent):
                 self.relocate_node(node, highest_order_node)
 
-                if initial and node.weight == highest_order_node.weight:
-                    ind_1 = arr.index(node)
-                    ind_2 = arr.index(highest_order_node)
-                    arr[ind_1], arr[ind_2] = arr[ind_2], arr[ind_1]
-
-            if not initial:
-                self.increment_node_weight(node)
-            elif node_original_parent.is_branch:
-                self.increment_node_weight(node_original_parent)
-
-            initial = False
+            self.increment_node_weight(node)
             node = node.parent
-
-        # self.update_node_weight(self.root)
 
     def create_node(self, symbol: str) -> HuffmanNode:
         # setting the NYT node as the parent and spawning two new children for it
@@ -146,7 +142,7 @@ class AdaptiveHuffmanTree:
 
         self.order_index -= 2
 
-        return leaf
+        return parent
 
     @staticmethod
     def get_code(node: HuffmanNode) -> Bitcode:
@@ -182,21 +178,125 @@ class AdaptiveHuffmanTree:
         setattr(parent_2, "left" if node_2 is parent_2.left else "right", node_1)
 
 
-def parent_child_relation(completed_tree: AdaptiveHuffmanTree) -> None:
-    def recursive_check(node: HuffmanNode, parent: HuffmanNode):
-        if node.left:
-            assert recursive_check(node.left, node) is True, "invalid child to parent relation"
-        if node.right:
-            assert recursive_check(node.right, node) is True, "invalid child to parent relation"
+class AdaptiveHuffmanCodingEncoder(AdaptiveHuffmanTree):
+    def __init__(self) -> None:
+        super().__init__()
 
-        if node.parent is not None:
-            assert node in (parent.left, parent.right), "invalid parent to child relation"
-        else:
-            assert not node.is_branch and not node.is_leaf, "invalid root node"
+    def encode(self, data: str) -> Bitcode:
+        huffman_code = ""
+        try:
+            for symbol in data:
+                if symbol in self.symbol_catalogue:
+                    node = self.symbol_catalogue[symbol]
+                    huffman_code += self.get_code(node)
 
-        return node.parent is parent and node.parent not in (node, node.left, node.right)
+                else:
+                    huffman_code += self.get_code(self.NYT) + FIXED_CODE_LOOKUP[symbol]
 
-    return recursive_check(completed_tree.root, None)
+                    node = self.create_node(symbol)
+                    if node.parent and not node.parent.is_root:
+                        node = self.pre_process(node)
+
+                self.update(node)
+        except Exception as err:
+            raise Exception("error occured while encoding") from err
+
+        return huffman_code
+
+
+class AdaptiveHuffmanCodingDecoder(AdaptiveHuffmanTree):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def decode(self, bits: Bitcode) -> str:
+        symbol_getter = self.get_symbol(bits)
+        decoded_data = ""
+        try:
+            while True:
+                symbol = next(symbol_getter)
+
+                if symbol is main_config.EOF_MARKER:
+                    break
+
+                elif symbol in self.symbol_catalogue:
+                    node = self.symbol_catalogue[symbol]
+
+                else:
+                    node = self.create_node(symbol)
+
+                    if node.parent and not node.parent.is_root:
+                        node = self.pre_process(node)
+
+                self.update(node)
+                decoded_data += symbol
+
+        except StopIteration:
+            pass
+            # raise Exception("error occured while decoding") from err
+
+        return decoded_data
+
+    def get_symbol(self, bits: Bitcode) -> str:
+        if self.root is self.NYT:
+            code, bits = bits[:FIXED_CODE_SIZE], bits[FIXED_CODE_SIZE:]
+            yield FIXED_SYMBOL_LOOKUP[code]
+
+        bitstream = iter(bits)
+        current_node = self.root
+
+        try:
+            while True:
+
+                new_bit = next(bitstream)
+                if new_bit == "0":
+                    current_node = current_node.left
+                elif new_bit == "1":
+                    current_node = current_node.right
+                else:
+                    raise ValueError(f"invalid bit found: {new_bit}")
+
+                if current_node is self.NYT:
+                    current_node = self.root
+                    i = 0
+                    buffer = ""
+                    while i < FIXED_CODE_SIZE:
+                        buffer += next(bitstream)
+                        i += 1
+
+                    yield FIXED_SYMBOL_LOOKUP[buffer]
+
+                elif current_node.is_leaf:
+                    symbol = current_node.symbol
+                    current_node = self.root
+                    yield symbol
+
+        except StopIteration:
+            pass
+
+
+def encode() -> Generator[Bitcode, str, AdaptiveHuffmanTree]:
+    tree = AdaptiveHuffmanTree()
+    huffman_code = ""
+
+    try:
+        while True:
+            symbol = yield huffman_code
+
+            if symbol in tree.symbol_catalogue:
+                node = tree.symbol_catalogue[symbol]
+                huffman_code = tree.get_code(node)
+
+            else:
+                node = tree.create_node(symbol)
+                huffman_code = tree.get_code(tree.NYT) + FIXED_CODE_LOOKUP[symbol]
+
+                if node.parent and not node.parent.is_root:
+                    node = tree.pre_process(node)
+
+            tree.update(node)
+
+    except Exception as err:
+        raise Exception("error occured while encoding") from err
 
 
 def generate_header_from_codebook(

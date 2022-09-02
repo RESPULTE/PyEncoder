@@ -5,12 +5,10 @@ import pytest
 
 
 @pytest.fixture
-def completed_tree(StringData) -> hc.AdaptiveHuffmanTree:
-    tree = hc.AdaptiveHuffmanTree()
-    for sym in StringData:
-        tree.encode(sym)
-
-    return tree
+def completed_tree(StringData) -> hc.AdaptiveHuffmanCodingEncoder:
+    encoder = hc.AdaptiveHuffmanCodingEncoder()
+    encoder.encode(StringData + hc.main_config.EOF_MARKER)
+    return encoder
 
 
 def test_relocate_node() -> None:
@@ -46,26 +44,47 @@ def test_relocate_node() -> None:
     assert node_1.order is order_2 and node_2.order is order_1
 
 
+def test_parent_child_relation(completed_tree: hc.AdaptiveHuffmanCodingEncoder) -> None:
+    def recursive_check(node: hc.HuffmanNode, parent: hc.HuffmanNode):
+        if node.left:
+            assert recursive_check(node.left, node) is True, "invalid child to parent relation"
+        if node.right:
+            assert recursive_check(node.right, node) is True, "invalid child to parent relation"
+
+        if node.parent is not None:
+            assert node in (parent.left, parent.right), "invalid parent to child relation"
+        else:
+            assert not node.is_branch and not node.is_leaf, "invalid root node"
+
+        return node.parent is parent and node.parent not in (node, node.left, node.right)
+
+    return recursive_check(completed_tree.root, None)
+
+
 def test_create_node() -> None:
     # populating tree with some random nodes (test for the insertion)
     tree = hc.AdaptiveHuffmanTree()
-    tree.create_node("initial")
+    old_NYT_node = tree.NYT
+    parent_node = tree.create_node("ASS")
+    leaf_node, NYT_node = parent_node.right, parent_node.left
 
-    symbol = "ASS"
-    node = tree.create_node(symbol)
+    assert old_NYT_node is parent_node
 
-    assert node.order == (node.parent.order - 1)
+    assert leaf_node.is_leaf and leaf_node.symbol is "ASS"
 
-    # test order update correctness
-    assert tree.NYT.order == (node.parent.order - 2) == tree.order_index
+    assert leaf_node.order is (parent_node.order - 1)
 
-    # test parent-to-child relation correctness
-    assert node.parent.left == tree.NYT and node.parent.right == node
+    assert NYT_node is tree.NYT
 
-    assert symbol in tree.symbol_catalogue
+    assert tree.order_index is tree.NYT.order
 
-    # test cataloguing correctness
-    assert tree.weight_catalogue[1][0:2] == [node, node.parent]
+
+def test_generator_encode(StringData: str) -> None:
+    encoder = hc.encode()
+
+    encoder.send(None)
+    for sym in StringData:
+        encoder.send(sym)
 
 
 def test_get_code() -> None:
@@ -101,3 +120,11 @@ def test_set_node_weight() -> None:
     assert tree.weight_catalogue[2][1] is node
 
     assert node.weight == 2
+
+
+def test_decode(StringData: str) -> None:
+    encoder = hc.AdaptiveHuffmanCodingEncoder()
+    encoded_data = encoder.encode(StringData + hc.main_config.EOF_MARKER)
+    decoder = hc.AdaptiveHuffmanCodingDecoder()
+    decoded_data = decoder.decode(encoded_data)
+    assert decoded_data == StringData
