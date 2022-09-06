@@ -4,12 +4,12 @@ import collections
 from typing import List, OrderedDict, Tuple
 
 from pyencoder.type_hints import ValidData, ValidDataset
-import pyencoder.config as main_config
+import pyencoder.config.main_config as main_config
 
 
 class ArithmeticCodebook(dict):
     def __init__(self) -> None:
-        self.symbol_probability_bounds = []
+        self.symbol_probability_bounds: List[int] = []
         self.total_elems = 0
 
     @classmethod
@@ -32,43 +32,6 @@ class ArithmeticCodebook(dict):
         return codebook
 
     def search_symbol(self, probability: int) -> Tuple[ValidData, Tuple[int, int]]:
-        index = bisect.bisect_right(self.symbol_probability_bounds, probability) - 1
-        return (self[index], (self.symbol_probability_bounds[index], self.symbol_probability_bounds[index + 1]))
-
-
-# * IMPLEMENT 'lru_cache' FOR 'calculate_symbol_probability_bounds'
-class AdaptiveArithmeticCodebook:
-    def __init__(self):
-        self._symbol_catalogue = OrderedDict({k: 1 for k in main_config.SYMBOLS})
-        self._symbol_counts = self._symbol_catalogue.values()
-
-        self.calculate_symbol_probability_bounds = itertools.accumulate
-
-    @property
-    def total_symbols(self) -> int:
-        return sum(self._symbol_counts)
-
-    @property
-    def symbol_catalogue(self) -> List[Tuple[str, int]]:
-        return list(self._symbol_catalogue.items())
-
-    @property
-    def symbol_probability_bounds(self) -> List[int]:
-        return list(self.calculate_symbol_probability_bounds((0, *self._symbol_counts)))
-
-    def get_symbol(self, probability: int) -> str:
-        index = bisect.bisect_right(self.symbol_probability_bounds, probability) - 1
-        return main_config.SYMBOLS[index]
-
-    def get_probability(self, symbol: str) -> Tuple[int, int]:
-        index = main_config.SYMBOLS.index(symbol)
-        return tuple(self.symbol_probability_bounds[index : index + 2])
-
-    def __setitem__(self, symbol: str, count: int) -> None:
-        if symbol not in self._symbol_catalogue:
-            raise KeyError(f"The symbol {symbol} is not an ascii character.")
-
-        self._symbol_catalogue[symbol] = count
-
-    def __getitem__(self, symbol: str) -> str:
-        return self._symbol_catalogue[symbol]
+        sym_probs = self.symbol_probability_bounds
+        index = bisect.bisect_right(sym_probs, probability) - 1
+        return (self[index], (sym_probs[index], sym_probs[index + 1]))

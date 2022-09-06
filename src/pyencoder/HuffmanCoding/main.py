@@ -72,9 +72,6 @@ def decode_length(
     curr_index = 0
     curr_code = ""
 
-    if dtype not in ("f", "d", float):
-        dtype = int
-
     while to_process:
         curr_code += to_process[:1]
         to_process = to_process[1:]
@@ -109,20 +106,15 @@ def decode_length(
 #     ...
 
 
-def encode(
-    dataset: ValidDataset, dtype: Optional[SupportedDataType], length_encoding: bool = False
-) -> Tuple[Dict[ValidData, Bitcode], Bitcode]:
+def encode(dataset: ValidDataset) -> Tuple[Dict[ValidData, Bitcode], Bitcode]:
     codebook = generate_canonical_codebook(dataset)
     encoded_data = "".join([codebook[data] for data in dataset])
     return codebook, encoded_data
 
 
 def encode_length(
-    dataset: ValidDataset, dtype: Optional[SupportedDataType], length_encoding: bool = False
+    dataset: ValidDataset, dtype: Optional[SupportedDataType]
 ) -> Tuple[Dict[ValidData, Bitcode], Bitcode]:
-
-    if dtype not in ("f", "d", float):
-        dtype = int
     bin_dataset = [tobin(data, dtype) for data in dataset]
     binlen_dataset = [len(data) for data in bin_dataset]
 

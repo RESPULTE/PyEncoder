@@ -1,7 +1,7 @@
 import struct
 from typing import List, Iterable, Optional, Sequence, Tuple, Type, Union, overload
 
-from pyencoder import config
+from pyencoder.config import main_config
 from pyencoder.type_hints import Bitcode, ValidData, ValidDataset, SupportedDataType
 
 
@@ -115,14 +115,14 @@ def frombin(
             decoded_data = [int(__data[i : i + step], 2) for i in range(0, stop, step)]
         return decoded_data if num != 1 else decoded_data[0]
 
-    bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN)
+    bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, main_config.ENDIAN)
     if __dtype in ("s", str):
-        return "".join(bytes.decode(bytedata, encoding or config.DEFAULT_STR_FORMAT))
+        return "".join(bytes.decode(bytedata, encoding or main_config.DEFAULT_STR_FORMAT))
 
     else:
         try:
             decoded_data = list(
-                struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, __dtype), bytedata)
+                struct.unpack("%s%s%s" % (">" if main_config.ENDIAN == "big" else "<", num, __dtype), bytedata)
             )
             return decoded_data if num != 1 else decoded_data[0]
         except struct.error:
@@ -139,28 +139,28 @@ def tobytes(
 ) -> bytes:
 
     if __dtype in ("s", str):
-        bytedata = str.encode(__data, encoding or config.DEFAULT_STR_FORMAT)
+        bytedata = str.encode(__data, encoding or main_config.DEFAULT_STR_FORMAT)
 
     elif __dtype == "bin":
-        bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, config.ENDIAN)
+        bytedata = int(__data, 2).to_bytes((len(__data) + 7) // 8, main_config.ENDIAN)
 
     elif __dtype == int:
-        bytedata = int.to_bytes(__data, (__data.bit_length() + 7) // 8, config.ENDIAN, signed=signed)
+        bytedata = int.to_bytes(__data, (__data.bit_length() + 7) // 8, main_config.ENDIAN, signed=signed)
 
     else:
         if __dtype == float:
-            __dtype = config.DEFAULT_FLOAT_FORMAT
+            __dtype = main_config.DEFAULT_FLOAT_FORMAT
 
         else:
             try:
-                config.CTYPE_INT_DTYPE_BITSIZE[__dtype]
+                main_config.CTYPE_INT_DTYPE_BITSIZE[__dtype]
             except KeyError:
                 raise TypeError(f"invalid data type: {__dtype}")
 
         if isinstance(__data, Iterable):
-            bytedata = struct.pack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", len(__data), __dtype), *__data)
+            bytedata = struct.pack("%s%s%s" % (">" if main_config.ENDIAN == "big" else "<", len(__data), __dtype), *__data)
         else:
-            bytedata = struct.pack("%s%s" % (">" if config.ENDIAN == "big" else "<", __dtype), __data)
+            bytedata = struct.pack("%s%s" % (">" if main_config.ENDIAN == "big" else "<", __dtype), __data)
 
     encoded_bytelen = len(bytedata)
 
@@ -209,12 +209,12 @@ def frombytes(
         stop = len(__data)
         step = stop // num
         decoded_data = [
-            int.from_bytes(__data[i : i + step], config.ENDIAN, signed=signed) for i in range(0, stop, step)
+            int.from_bytes(__data[i : i + step], main_config.ENDIAN, signed=signed) for i in range(0, stop, step)
         ]
         return decoded_data if num != 1 else decoded_data[0]
 
     if __dtype in ("s", str):
-        return "".join(bytes.decode(__data, encoding or config.DEFAULT_STR_FORMAT))
+        return "".join(bytes.decode(__data, encoding or main_config.DEFAULT_STR_FORMAT))
 
     elif __dtype == "bin":
         return "".join("{:08b}".format(b) for b in __data)
@@ -222,7 +222,7 @@ def frombytes(
     else:
         try:
             decoded_data = list(
-                struct.unpack("%s%s%s" % (">" if config.ENDIAN == "big" else "<", num, __dtype), __data)
+                struct.unpack("%s%s%s" % (">" if main_config.ENDIAN == "big" else "<", num, __dtype), __data)
             )
             return decoded_data if num != 1 else decoded_data[0]
         except struct.error:

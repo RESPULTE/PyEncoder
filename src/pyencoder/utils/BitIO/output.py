@@ -11,14 +11,14 @@ class IBufferedBitOutput(IBufferedBitIO):
         super().__init__(file_obj, buffer_size)
 
     def write(self, bits: int | str) -> None:
-        self.write_to_buffer(bits)
+        self._write_to_buffer(bits)
 
         if self.buffered_size < self.bit_buffer_size:
             return
 
-        retval = self.read_from_buffer(self.bit_buffer_size)
+        retval = self._read_from_buffer(self.bit_buffer_size)
         bytes_to_output = self._convert_to_bytes(retval)
-        self.file_obj.write(bytes_to_output)
+        self.source_obj.write(bytes_to_output)
 
     @abc.abstractmethod
     def _convert_to_bytes(self) -> bytes:
@@ -28,7 +28,7 @@ class IBufferedBitOutput(IBufferedBitIO):
         if self.buffered_size != 0:
             self.byte_buffer_size = -(-self.buffered_size // 8)
             bytes_to_output = self._convert_to_bytes(self.buffered_bits)
-            self.file_obj.write(bytes_to_output)
+            self.source_obj.write(bytes_to_output)
 
         self.buffered_size = 0
         self.buffered_bits = None

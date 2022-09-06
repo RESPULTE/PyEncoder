@@ -1,13 +1,17 @@
 import collections
-import pyencoder.HuffmanCoding.codebook as hc
+import pyencoder.AdaptiveHuffmanCoding as hc
+import pyencoder.config.main_config as main_config
 import uuid
 import pytest
 
+from pyencoder.utils.BitIO.input import BufferedBitInput
+
 
 @pytest.fixture
-def completed_tree(StringData) -> hc.AdaptiveHuffmanCodingEncoder:
-    encoder = hc.AdaptiveHuffmanCodingEncoder()
-    encoder.encode(StringData + hc.main_config.EOF_MARKER)
+def completed_tree(StringData) -> hc.AdaptiveHuffmanEncoder:
+    encoder = hc.AdaptiveHuffmanEncoder()
+    for sym in StringData + main_config.EOF_MARKER:
+        encoder.encode(sym)
     return encoder
 
 
@@ -15,8 +19,8 @@ def test_relocate_node() -> None:
     uid = uuid.uuid1
 
     # None for all cuz they wont be compared
-    parent_1 = hc.HuffmanNode(None, 1000, None, None)
-    parent_2 = hc.HuffmanNode(None, 1000, None, None)
+    parent_1 = hc.AdaptiveHuffmanNode(None, 1000, None, None)
+    parent_2 = hc.AdaptiveHuffmanNode(None, 1000, None, None)
 
     # using uuid cuz the type of them doesn't matter
     symbol_1, symbol_2 = uid(), uid()
@@ -25,14 +29,14 @@ def test_relocate_node() -> None:
     child_l1, child_r1 = uid(), uid()
     child_l2, child_r2 = uid(), uid()
 
-    node_1 = hc.HuffmanNode(symbol_1, weight_1, order_1, parent_1, child_l1, child_r1)
-    node_2 = hc.HuffmanNode(symbol_2, weight_2, order_2, parent_2, child_l2, child_r2)
+    node_1 = hc.AdaptiveHuffmanNode(symbol_1, weight_1, order_1, parent_1, child_l1, child_r1)
+    node_2 = hc.AdaptiveHuffmanNode(symbol_2, weight_2, order_2, parent_2, child_l2, child_r2)
 
     # setting the parent-to-child relationshi[]
     parent_1.left = node_1
     parent_2.right = node_2
 
-    hc.AdaptiveHuffmanTree.relocate_node(node_1, node_2)
+    hc.relocate_node(node_1, node_2)
 
     # check parent correctness
     assert node_1.parent is parent_2 and node_2.parent is parent_1
@@ -44,8 +48,8 @@ def test_relocate_node() -> None:
     assert node_1.order is order_2 and node_2.order is order_1
 
 
-def test_parent_child_relation(completed_tree: hc.AdaptiveHuffmanCodingEncoder) -> None:
-    def recursive_check(node: hc.HuffmanNode, parent: hc.HuffmanNode):
+def test_parent_child_relation(completed_tree: hc.AdaptiveHuffmanEncoder) -> None:
+    def recursive_check(node: hc.AdaptiveHuffmanNode, parent: hc.AdaptiveHuffmanNode):
         if node.left:
             assert recursive_check(node.left, node) is True, "invalid child to parent relation"
         if node.right:
@@ -79,27 +83,19 @@ def test_create_node() -> None:
     assert tree.order_index is tree.NYT.order
 
 
-def test_generator_encode(StringData: str) -> None:
-    encoder = hc.encode()
-
-    encoder.send(None)
-    for sym in StringData:
-        encoder.send(sym)
-
-
 def test_get_code() -> None:
-    n1 = hc.HuffmanNode(None, None, None)
-    n2 = hc.HuffmanNode(None, None, None, n1)
-    n3 = hc.HuffmanNode(None, None, None, n2)
-    n4 = hc.HuffmanNode(None, None, None, n3)
-    n5 = hc.HuffmanNode(None, None, None, n4)
+    n1 = hc.AdaptiveHuffmanNode(None, None, None)
+    n2 = hc.AdaptiveHuffmanNode(None, None, None, n1)
+    n3 = hc.AdaptiveHuffmanNode(None, None, None, n2)
+    n4 = hc.AdaptiveHuffmanNode(None, None, None, n3)
+    n5 = hc.AdaptiveHuffmanNode(None, None, None, n4)
 
     n1.right = n2
     n2.left = n3
     n3.right = n4
     n4.right = n5
 
-    assert hc.AdaptiveHuffmanTree.get_code(n5) == "1011"
+    assert hc.codebook.get_huffman_code(n5) == "1011"
 
 
 def test_symbol_weight_correctness(StringData: int, completed_tree: hc.AdaptiveHuffmanTree) -> None:
@@ -110,9 +106,9 @@ def test_symbol_weight_correctness(StringData: int, completed_tree: hc.AdaptiveH
 
 def test_set_node_weight() -> None:
     tree = hc.AdaptiveHuffmanTree()
-    node = hc.HuffmanNode(None, 1, 249)
+    node = hc.AdaptiveHuffmanNode(None, 1, 249)
 
-    tree.weight_catalogue[2] = [hc.HuffmanNode(None, 2, 224), hc.HuffmanNode(None, 2, 250)]
+    tree.weight_catalogue[2] = [hc.AdaptiveHuffmanNode(None, 2, 224), hc.AdaptiveHuffmanNode(None, 2, 250)]
     tree.weight_catalogue[1] = [node]
 
     tree.increment_node_weight(node)
@@ -123,8 +119,16 @@ def test_set_node_weight() -> None:
 
 
 def test_decode(StringData: str) -> None:
-    encoder = hc.AdaptiveHuffmanCodingEncoder()
-    encoded_data = encoder.encode(StringData + hc.main_config.EOF_MARKER)
-    decoder = hc.AdaptiveHuffmanCodingDecoder()
-    decoded_data = decoder.decode(encoded_data)
+    encoder = hc.AdaptiveHuffmanEncoder()
+    encoded_data = ""
+    for sym in StringData:
+        encoded_data += encoder.encode(sym)
+    encoded_data += encoder.flush()
+
+    decoder = hc.AdaptiveHuffmanDecoder()
+
+    decoded_data = ""
+    for sym in decoder.decode(encoded_data):
+        decoded_data += sym
+
     assert decoded_data == StringData

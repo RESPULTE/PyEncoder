@@ -1,32 +1,43 @@
-from typing import Dict, Type, TypeVar
+from typing import Dict, Iterable, Literal, Type, TypeVar
 
+from pyencoder.config import main_config
 
-class UnsignedBitstring:
-    def __new__(cls, data: str, _cache: Dict[str, "UnsignedBitstring"] = {}) -> None:
-        if not isinstance(data, str):
-            raise TypeError(f"invalid type: {type(data).__name__}")
+# take in bytes
+# spits out an Iterable of choosing (str/int)
+class Bitstring(str):
+    _cache: Dict[str, "Bitstring"] = {}
 
-        elif not all(x in ("0", "1") for x in data):
-            raise ValueError(f"bits must only contain 1s and 0s")
-
-        if data in _cache:
-            return _cache[data]
-
-        elif isinstance(data, cls):
-            return data
+    def __new__(cls, data: bytes, *arg, **kwarg) -> None:
+        if data in cls._cache:
+            return cls._cache[data]
 
         obj = super().__new__(cls)
-        _cache[data] = obj
+        cls._cache[data] = obj
         return obj
 
-    def __init__(self, data: str) -> None:
-        self.data = data
+    def __init__(self, data: bytes, retval: Type[str] | Type[int]) -> None:
+        try:
+            self.data = int.from_bytes(data, main_config.ENDIAN)
+        except TypeError as err:
+            raise TypeError(f"invalid type for bitstring: {type(data)}") from err
 
-    def __invert__(self) -> "UnsignedBitstring":
-        return type(self)(self.data)
+        self.size = len(data) * 8
+        self.retval = retval
 
-    def __int__(self) -> int:
-        return int(self.data, 2)
+        if retval is str:
+            self.data = "{0:0{bit_len}b}".format(self.data, bit_len=self.size)
 
-    def concatenate(self, other: "UnsignedBitstring") -> "UnsignedBitstring":
-        return type(self)(self.data + other.data)
+    def __iter__(self) -> Iterable:
+        if self.retval is str:
+            yield from self.data
+            return
+
+        for i in range(self.size - 1, -1, -1):
+            yield (self.data >> i) & 1
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(data={self.data}, size={self.size}, retval={self.retval.__name__})"
+
+
+class BitInteger(int):
+    ...
