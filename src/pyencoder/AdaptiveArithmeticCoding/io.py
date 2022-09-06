@@ -1,121 +1,30 @@
 from typing import BinaryIO, TextIO
 
-import pyencoder.config.main_config as main_config
-import pyencoder.config.ArithmeticCoding_config as ArithmeticCoding_config
-
 from pyencoder.utils.BitIO import BufferedBitInput, BufferedBitOutput
-from pyencoder.AdaptiveArithmeticCoding.codebook import AdaptiveArithmeticCodebook
+from pyencoder.AdaptiveArithmeticCoding import decode, encode, flush
+from pyencoder.config import ArithmeticCoding_config
 
 
-def load(input_file: TextIO, output_file: BinaryIO = None) -> None:
-    codebook = AdaptiveArithmeticCodebook()
+def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
+    if output_file:
+        for symbol in decode(input_file):
+            output_file.write(symbol)
+            print(symbol)
+        return None
 
-    lower_limit = 0
-    code_values = 0
-    upper_limit = ArithmeticCoding_config.FULL_RANGE_BITMASK
-
-    bitstream = BufferedBitInput(input_file, ArithmeticCoding_config.PRECISION // 8, as_int=True)
-
-    for i in range(ArithmeticCoding_config.PRECISION):
-        code_values = (code_values << 1) + i
-
-    while True:
-        current_range = upper_limit - lower_limit + 1
-        scaled_code_value = ((code_values - lower_limit + 1) * codebook.total_symbols - 1) // current_range
-
-        sym, (sym_low, sym_high) = codebook.probability_symbol_search(scaled_code_value)
-
-        if sym == main_config.EOF_MARKER:
-            break
-
-        output_file.write(sym)
-        upper_limit = lower_limit + ((sym_high * current_range) // codebook.total_symbols) - 1
-        lower_limit = lower_limit + ((sym_low * current_range) // codebook.total_symbols)
-        codebook[sym] += 1
-
-        while True:
-
-            # value's MSB is 0
-            if upper_limit < ArithmeticCoding_config.HALF_RANGE:
-                pass
-
-            # value's MSB is 1
-            elif lower_limit >= ArithmeticCoding_config.HALF_RANGE:
-                lower_limit -= ArithmeticCoding_config.HALF_RANGE
-                upper_limit -= ArithmeticCoding_config.HALF_RANGE
-                code_values -= ArithmeticCoding_config.HALF_RANGE
-
-            # lower & upper limit are converging
-            elif (
-                lower_limit >= ArithmeticCoding_config.QUARTER_RANGE
-                and upper_limit < ArithmeticCoding_config.THREE_QUARTER_RANGE
-            ):
-                lower_limit -= ArithmeticCoding_config.QUARTER_RANGE
-                upper_limit -= ArithmeticCoding_config.QUARTER_RANGE
-                code_values -= ArithmeticCoding_config.QUARTER_RANGE
-
-            else:
-                # lower_limit < 25% AND upper_limit > 75%
-                # high & low must be at least 1/4 apart
-                break
-
-            lower_limit = lower_limit << 1
-            upper_limit = (upper_limit << 1) + 1
-
-            code_values = (code_values << 1) + bitstream.read()
+    return "".join(decode(input_file))
 
 
 def dump(input_file: TextIO, output_file: BinaryIO) -> None:
-    codebook = AdaptiveArithmeticCodebook()
-    output_bitstream = BufferedBitOutput(output_file, ArithmeticCoding_config.PRECISION // 8)
+    bitstream = BufferedBitOutput(output_file, ArithmeticCoding_config.PRECISION // 8)
 
-    lower_limit = 0
-    upper_limit = ArithmeticCoding_config.FULL_RANGE_BITMASK
+    while True:
 
-    encoding = True
-    num_pending_bits = 0
+        symbol = input_file.read(1)
 
-    while encoding:
+        if not symbol:
+            bitstream.write(flush())
+            bitstream.flush()
+            break
 
-        sym = input_file.read(1)
-
-        if not sym:
-            sym = main_config.EOF_MARKER
-            encoding = False
-
-        sym_low, sym_high = codebook.catalogue_symbol(sym)
-
-        current_range = upper_limit - lower_limit + 1
-        upper_limit = lower_limit + ((sym_high * current_range) // codebook.total_symbols) - 1
-        lower_limit = lower_limit + ((sym_low * current_range) // codebook.total_symbols)
-
-        while True:
-            if upper_limit < ArithmeticCoding_config.HALF_RANGE:
-                output_bitstream.write("0" + "1" * num_pending_bits)
-                num_pending_bits = 0
-
-            elif lower_limit >= ArithmeticCoding_config.HALF_RANGE:
-                output_bitstream.write("1" + "0" * num_pending_bits)
-                num_pending_bits = 0
-
-            elif (
-                lower_limit >= ArithmeticCoding_config.QUARTER_RANGE
-                and upper_limit < ArithmeticCoding_config.THREE_QUARTER_RANGE
-            ):
-                lower_limit -= ArithmeticCoding_config.QUARTER_RANGE
-                upper_limit -= ArithmeticCoding_config.QUARTER_RANGE
-                num_pending_bits += 1
-
-            else:
-                break
-
-            lower_limit = lower_limit << 1
-            upper_limit = (upper_limit << 1) + 1
-
-            lower_limit &= ArithmeticCoding_config.FULL_RANGE_BITMASK
-            upper_limit &= ArithmeticCoding_config.FULL_RANGE_BITMASK
-
-    num_pending_bits += 1
-    bit = 0 if lower_limit < ArithmeticCoding_config.QUARTER_RANGE else 1
-    output_bitstream.write("%s%s" % (bit, str(bit ^ 1) * num_pending_bits))
-    output_bitstream.flush()
+        bitstream.write(encode(symbol))

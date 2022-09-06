@@ -47,7 +47,9 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
             raise Exception("error occured while encoding") from err
 
 
-encode = AdaptiveHuffmanEncoder().encode
+encoder = AdaptiveHuffmanEncoder()
+encode = encoder.encode
+flush = encoder.flush()
 
 
 class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):

@@ -39,5 +39,5 @@ class AdaptiveArithmeticCodebook:
     def _update(self, symbol: str, index: int) -> None:
         self.symbol_catalogue[symbol] += 1
 
-        for i in range(index, main_config.NUM_SYMBOLS):
+        for i in range(index + 1, main_config.NUM_SYMBOLS + 1):
             self.symbol_probability_bounds[i] += 1

@@ -1,7 +1,8 @@
 from typing import BinaryIO, TextIO
-from .main import encode, decode
-from pyencoder.utils.BitIO import BufferedBitInput, BufferedBitOutput
-from pyencoder.config import main_config
+
+from .main import encode, flush, decode
+
+from pyencoder.utils.BitIO import BufferedBitOutput
 
 
 def dump(input_file: TextIO, output_file: BinaryIO) -> None:
@@ -12,41 +13,17 @@ def dump(input_file: TextIO, output_file: BinaryIO) -> None:
         symbol = input_file.read(1)
 
         if not symbol:
+            bitstream.write(flush())
             bitstream.flush()
             break
 
         bitstream.write(encode(symbol))
 
-    bitstream.write(encode(main_config.EOF_MARKER))
 
-
-def load(input_file: BinaryIO, output_file: TextIO = None) -> str:
-    bitstream = BufferedBitInput(input_file)
-    decoder = decode(bitstream)
-
+def load(input_file: BinaryIO, output_file: TextIO = None) -> str | None:
     if output_file:
-        while True:
-            try:
-                symbol = next(decoder)
-            except StopIteration:
-                raise Exception("EOF not detected")
-
-            if symbol == main_config.EOF_MARKER:
-                break
-
+        for symbol in decode(input_file):
             output_file.write(symbol)
+        return None
 
-        return
-
-    decoded_data = ""
-    while True:
-        try:
-            symbol = next(decoder)
-        except StopIteration:
-            raise Exception("EOF not detected")
-
-        if symbol == main_config.EOF_MARKER:
-            break
-        decoded_data += symbol
-
-    return
+    return "".join(decode(input_file))

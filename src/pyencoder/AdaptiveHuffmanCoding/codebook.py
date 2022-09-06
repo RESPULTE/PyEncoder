@@ -3,8 +3,8 @@ import operator
 import bisect
 import dataclasses
 import collections as colt
-
 from typing import Dict, List
+
 
 import pyencoder.config.main_config as main_config
 from pyencoder.type_hints import ValidData, Bitcode
