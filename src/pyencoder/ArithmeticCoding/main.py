@@ -5,6 +5,7 @@ from pyencoder.type_hints import Bitcode, ValidData, ValidDataset
 
 import pyencoder.config.ArithmeticCoding_config as ArithmeticCoding_config
 from pyencoder.ArithmeticCoding.codebook import ArithmeticCodebook
+from pyencoder.utils.BitIO import BufferedBitInput
 
 
 def encode(dataset: ValidDataset) -> Tuple[Dict[ValidData, Tuple[int, int]], Bitcode]:
@@ -66,9 +67,9 @@ def decode(bindata: Bitcode, codebook: ArithmeticCodebook) -> ValidDataset:
     code_values = 0
     upper_limit = ArithmeticCoding_config.FULL_RANGE_BITMASK
 
-    bitstream = iter(bindata)
+    bitstream = BufferedBitInput(bindata, as_int=True)
     for _ in range(ArithmeticCoding_config.PRECISION):
-        code_values = (code_values << 1) + int(next(bitstream))
+        code_values = (code_values << 1) + bitstream.read(1)
 
     decoded_data = []
     total_elems = codebook.total_elems
@@ -116,7 +117,7 @@ def decode(bindata: Bitcode, codebook: ArithmeticCodebook) -> ValidDataset:
             upper_limit = (upper_limit << 1) + 1
 
             try:
-                next_bit = int(next(bitstream))
+                next_bit = bitstream.read(1)
 
             except StopIteration:
                 next_bit = 0

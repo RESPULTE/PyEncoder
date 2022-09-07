@@ -47,7 +47,7 @@ def test_int_read_iter(StringData: str) -> None:
     assert "".join(output) == StringData
 
 
-@pytest.mark.parametrize("n", [1, 3, 7, 10, 20])
+@pytest.mark.parametrize("n", [1, 3, 7, 10, 20, 100])
 def test_str_read(StringData: str, n: int) -> None:
     with tempfile.TemporaryFile() as tmp:
         tmp.write(StringData.encode("ascii"))
@@ -108,6 +108,21 @@ def test_bit_write(StringData) -> None:
         writer = BufferedBitOutput(tmp)
         for s in StringData:
             writer.write(bin(ord(s))[2:].zfill(8))
+        writer.flush()
+
+        tmp.seek(0)
+
+        assert tmp.read().decode("utf-8") == StringData
+
+
+def test_bit_bulk_write(StringData) -> None:
+    with tempfile.TemporaryFile() as tmp:
+        bindata = ""
+        for s in StringData:
+            bindata += bin(ord(s))[2:].zfill(8)
+
+        writer = BufferedBitOutput(tmp)
+        writer.write(bindata)
         writer.flush()
 
         tmp.seek(0)

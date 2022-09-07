@@ -1,10 +1,8 @@
-from heapq import heappop, heappush, heapify
-from collections import Counter
+import operator
+import heapq
+import collections
+from typing import List, NamedTuple, Tuple, Dict
 
-from typing import Tuple, Dict
-
-import pyencoder.config.HuffmanCoding_config as config
-from pyencoder.utils.binary import frombin, frombytes, tobin, tobytes
 from pyencoder.type_hints import (
     CorruptedHeaderError,
     SupportedDataType,
@@ -14,57 +12,39 @@ from pyencoder.type_hints import (
 )
 
 
-def generate_header_from_codebook(codebook: Dict[ValidData, Bitcode]) -> Tuple[Bitcode, Bitcode]:
-    codelengths = ["0" * config.CODELENGTH_BITSIZE for _ in range(config.MAX_CODELENGTH)]
-    counted_codelengths = Counter([len(code) for code in codebook.values()])
+class HuffmanNode(NamedTuple):
+    frequency: int
+    bitlength: int
+    symbols: List[str]
 
-    for length, count in counted_codelengths.items():
-        codelengths[length - 1] = "{0:0{bitlen}b}".format(count, bitlen=config.CODELENGTH_BITSIZE)
-
-    codelengths = "".join(codelengths)
-    symbols = "".join(codebook.keys())
-
-    return codelengths, symbols
+    def __add__(self, other: "HuffmanNode") -> "HuffmanNode":
+        return type(self)(
+            frequency=self.frequency + other.frequency,
+            bitlength=max(self.bitlength, other.bitlength) + 1,
+            symbols=self.symbols + other.symbols,
+        )
 
 
 def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidData, Bitcode]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
-    counted_dataset = Counter(dataset).most_common()
+    counted_dataset = collections.Counter(dataset).most_common()
 
-    # [(frequency, max_bitlength, symbol)]
-    to_process = [(count, 1, [symbol]) for symbol, count in counted_dataset]
+    if len(counted_dataset) == 1:
+        return {counted_dataset.pop()[0], 1}
+
     codebook = {symbol: 0 for symbol, _ in counted_dataset}
-
-    heapify(to_process)
+    to_process = [HuffmanNode(freq, 1, [symbol]) for symbol, freq in counted_dataset]
+    heapq.heapify(to_process)
 
     while len(to_process) != 1:
-        tree_freq_1, tree_max_bitlength_1, tree_1 = heappop(to_process)
-        tree_freq_2, tree_max_bitlength_2, tree_2 = heappop(to_process)
+        node_1 = heapq.heappop(to_process)
+        node_2 = heapq.heappop(to_process)
 
-        new_subtree = tree_1 + tree_2
-        new_subtree_freq = tree_freq_1 + tree_freq_2
-        new_subtree_max_bitlength = max(tree_max_bitlength_1, tree_max_bitlength_2) + 1
-
-        for sym in new_subtree:
+        new_node = node_1 + node_2
+        for sym in new_node.symbols:
             codebook[sym] += 1
 
-        # ? wtf is happening here ------------
-        balance_factor = 0
-        if to_process:
-            balance_factor = to_process[0][0]
-        # ? -----------------------------------
-        heappush(
-            to_process,
-            (
-                new_subtree_freq + balance_factor,
-                new_subtree_max_bitlength,
-                new_subtree,
-            ),
-        )
-
-    else:
-        if len(codebook) == 1:
-            return {k: v + 1 for k, v in codebook.items()}
+        heapq.heappush(to_process, new_node)
 
     return codebook
 
@@ -77,10 +57,11 @@ def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidData, Bitcod
     # making sure that the bit shift won't ever happen for the first value
     prev_bitlength = float("inf")
     # sort the codebook by the bitlength
-    to_process = sorted([(bitlength, symbol) for symbol, bitlength in codebook.items()])
+    to_process = list(codebook.items())
+    to_process.sort(key=operator.itemgetter(1))
 
     canonical_codebook = {}
-    for bitlength, symbol in to_process:
+    for symbol, bitlength in to_process:
 
         # increment the code, which is in integer form btw, by 1
         # if the bitlength of this symbol is more than the last symbol, left-shift the code using bitwise operation
@@ -88,46 +69,7 @@ def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidData, Bitcod
         if bitlength > prev_bitlength:
             curr_code = curr_code << (bitlength - prev_bitlength)
 
-        canonical_codebook[symbol] = "{0:0{bitlen}b}".format(curr_code, bitlen=bitlength)
+        canonical_codebook[symbol] = "{0:0{num}b}".format(curr_code, num=bitlength)
         prev_bitlength = bitlength
 
     return canonical_codebook
-
-
-# !!!
-def generate_codebook_from_header(header: Bitcode, dtype: SupportedDataType) -> Dict[Bitcode, ValidData]:
-    try:
-        codelength_info = config.CODELENGTH_BITSIZE * config.MAX_CODELENGTH
-        bin_codelengths, bin_symbols = header[:codelength_info], header[codelength_info:]
-
-        num_symbols_per_codelength = [
-            int(bin_codelengths[bitlen : bitlen + config.CODELENGTH_BITSIZE], 2)
-            for bitlen in range(0, len(bin_codelengths), config.CODELENGTH_BITSIZE)
-        ]
-
-        num_codelength = len(num_symbols_per_codelength)
-        if num_codelength != config.MAX_CODELENGTH:
-            raise ValueError(
-                f"number of symbols decoded({num_codelength}) does not match the default values({config.MAX_CODELENGTH})"
-            )
-        symbols = frombin(bin_symbols, dtype, num=sum(num_symbols_per_codelength))
-        if not isinstance(symbols, list):
-            symbols = [symbols]
-    except (IndexError, ValueError) as err:
-        raise CorruptedHeaderError("Header cannot be decoded") from err
-
-    codebook = {}
-    curr_code = 0
-    curr_sym_index = 0
-
-    for bitlength, num in enumerate(num_symbols_per_codelength, start=1):
-
-        for _ in range(num):
-            bincode = tobin(curr_code, config.CODELENGTH_DTYPE, bitlength=bitlength)
-            codebook[bincode] = symbols[curr_sym_index]
-            curr_sym_index += 1
-            curr_code += 1
-
-        curr_code = curr_code << 1
-
-    return codebook

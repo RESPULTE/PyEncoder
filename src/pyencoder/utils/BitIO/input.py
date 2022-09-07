@@ -31,11 +31,12 @@ class IBufferedBitInput(IBufferedBitIO):
         if n < self.buffered_size:
             return self._read_from_buffer(n)
 
-        buffered_bits = next(self.bits_reader)
-        if not buffered_bits:
-            return self.flush()
+        while self.buffered_size < n:
+            buffered_bits = next(self.bits_reader)
+            if not buffered_bits:
+                return self.flush()
 
-        self.update_buffer(buffered_bits)
+            self.update_buffer(buffered_bits)
 
         return self._read_from_buffer(n)
 
@@ -107,6 +108,9 @@ class IBufferedBitInput(IBufferedBitIO):
 
             index += self.bit_buffer_size
 
+    def __bool__(self) -> bool:
+        return not self._flushed
+
     @abc.abstractmethod
     def _convert_from_bytes(self, _bytes: bytes) -> str | int:
         ...
@@ -115,6 +119,8 @@ class IBufferedBitInput(IBufferedBitIO):
 def BufferedBitInput(
     source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE, as_int: bool = False
 ) -> Union["BufferedIntegerInput", "BufferedStringInput"]:
+    if isinstance(source_obj, (BufferedIntegerInput, BufferedStringInput)):
+        return source_obj
 
     cls = BufferedStringInput if not as_int else BufferedIntegerInput
     return cls(source_obj, buffer_size)
