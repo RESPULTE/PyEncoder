@@ -4,8 +4,8 @@ import pytest
 import tempfile
 import collections
 
-from pyencoder.AdaptiveArithmeticCoding import codebook as AAC_codebook
-from pyencoder.AdaptiveArithmeticCoding import io as AAC_io
+from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding import codebook as AAC_codebook
+from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding import io as AAC_io
 
 
 @pytest.fixture

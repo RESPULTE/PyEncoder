@@ -1,2 +1,4 @@
-from .main import *
-from .io import *
+class Settings:
+    MAX_CODELENGTH = 16
+    CODELENGTH_BITSIZE = 8
+    SYMBOL_BITSIZE = 8

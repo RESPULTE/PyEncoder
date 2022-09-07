@@ -1,10 +1,6 @@
 import bisect
-import itertools
 import collections
-from typing import List, OrderedDict, Tuple
-
-from pyencoder.type_hints import ValidData, ValidDataset
-import pyencoder.config.main_config as main_config
+from typing import List, Tuple
 
 
 class ArithmeticCodebook(dict):
@@ -13,7 +9,7 @@ class ArithmeticCodebook(dict):
         self.total_elems = 0
 
     @classmethod
-    def from_dataset(cls, dataset: ValidDataset) -> "ArithmeticCodebook":
+    def from_dataset(cls, dataset: str) -> "ArithmeticCodebook":
         cummulative_proabability = 0
         codebook = cls()
 
@@ -31,7 +27,7 @@ class ArithmeticCodebook(dict):
 
         return codebook
 
-    def search_symbol(self, probability: int) -> Tuple[ValidData, Tuple[int, int]]:
+    def search_symbol(self, probability: int) -> Tuple[str, Tuple[int, int]]:
         sym_probs = self.symbol_probability_bounds
         index = bisect.bisect_right(sym_probs, probability) - 1
         return (self[index], (sym_probs[index], sym_probs[index + 1]))

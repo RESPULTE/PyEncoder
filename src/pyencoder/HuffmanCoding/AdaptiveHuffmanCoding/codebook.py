@@ -7,7 +7,6 @@ from typing import Dict, List
 
 
 import pyencoder.config.main_config as main_config
-from pyencoder.type_hints import ValidData, Bitcode
 
 
 FIXED_CODE_SIZE = math.ceil(math.log2(main_config.NUM_SYMBOLS))
@@ -17,7 +16,7 @@ FIXED_SYMBOL_LOOKUP = {v: k for k, v in FIXED_CODE_LOOKUP.items()}
 
 @dataclasses.dataclass
 class AdaptiveHuffmanNode:
-    symbol: ValidData
+    symbol: str
     weight: int
     order: int = dataclasses.field(compare=True)
 
@@ -56,7 +55,7 @@ class AdaptiveHuffmanNode:
         return False
 
 
-def get_huffman_code(node: AdaptiveHuffmanNode) -> Bitcode:
+def get_huffman_code(node: AdaptiveHuffmanNode) -> str:
     code = ""
     while node.parent != None:
         parent = node.parent
@@ -91,6 +90,9 @@ def relocate_node(node_1: AdaptiveHuffmanNode, node_2: AdaptiveHuffmanNode) -> N
 
 class AdaptiveHuffmanTree:
     def __init__(self) -> None:
+        self.reset()
+
+    def reset(self) -> None:
         self.symbol_catalogue: Dict[str, AdaptiveHuffmanNode] = {}
         self.weight_catalogue: colt.OrderedDict[int, List[AdaptiveHuffmanNode]] = colt.OrderedDict({1: []})
         self.order_index = 2 * main_config.NUM_SYMBOLS - 1

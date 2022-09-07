@@ -1,0 +1,33 @@
+ENDIAN: "big"
+
+SOF_MARKER: "\x0f"
+EOF_MARKER: "\x0f"
+
+PRECISION: 32
+SYMBOL_BIT_COUNT: 8
+
+CTYPE_INT_DTYPE_BITSIZE: {
+    # --- char ---#
+    b: 8,
+    B: 8,
+    # --- short ---#
+    h: 16,
+    H: 16,
+    # --- integer ---#
+    i: 32,
+    I: 32,
+    # --- long ---#
+    l: 32,
+    L: 32,
+    # --- long ---#
+    q: 64,
+    Q: 64,
+}
+
+HuffmanCoding:
+  MAX_CODELENGTH: 16
+  CODELENGTH_BITSIZE: 8
+  SYMBOL_BITSIZE: 8
+
+ArithmeticCoding:
+  precision: 32

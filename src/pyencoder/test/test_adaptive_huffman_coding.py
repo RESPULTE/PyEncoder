@@ -1,10 +1,11 @@
 import collections
-import pyencoder.AdaptiveHuffmanCoding as hc
+import pyencoder.HuffmanCoding.AdaptiveHuffmanCoding as hc
+import pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook as hcc
+from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanNode as Huffnode
+
 import pyencoder.config.main_config as main_config
 import uuid
 import pytest
-
-from pyencoder.utils.BitIO.input import BufferedBitInput
 
 
 @pytest.fixture
@@ -19,8 +20,8 @@ def test_relocate_node() -> None:
     uid = uuid.uuid1
 
     # None for all cuz they wont be compared
-    parent_1 = hc.AdaptiveHuffmanNode(None, 1000, None, None)
-    parent_2 = hc.AdaptiveHuffmanNode(None, 1000, None, None)
+    parent_1 = Huffnode(None, 1000, None, None)
+    parent_2 = Huffnode(None, 1000, None, None)
 
     # using uuid cuz the type of them doesn't matter
     symbol_1, symbol_2 = uid(), uid()
@@ -29,14 +30,14 @@ def test_relocate_node() -> None:
     child_l1, child_r1 = uid(), uid()
     child_l2, child_r2 = uid(), uid()
 
-    node_1 = hc.AdaptiveHuffmanNode(symbol_1, weight_1, order_1, parent_1, child_l1, child_r1)
-    node_2 = hc.AdaptiveHuffmanNode(symbol_2, weight_2, order_2, parent_2, child_l2, child_r2)
+    node_1 = Huffnode(symbol_1, weight_1, order_1, parent_1, child_l1, child_r1)
+    node_2 = Huffnode(symbol_2, weight_2, order_2, parent_2, child_l2, child_r2)
 
     # setting the parent-to-child relationshi[]
     parent_1.left = node_1
     parent_2.right = node_2
 
-    hc.relocate_node(node_1, node_2)
+    hcc.relocate_node(node_1, node_2)
 
     # check parent correctness
     assert node_1.parent is parent_2 and node_2.parent is parent_1
@@ -49,7 +50,7 @@ def test_relocate_node() -> None:
 
 
 def test_parent_child_relation(completed_tree: hc.AdaptiveHuffmanEncoder) -> None:
-    def recursive_check(node: hc.AdaptiveHuffmanNode, parent: hc.AdaptiveHuffmanNode):
+    def recursive_check(node: Huffnode, parent: Huffnode):
         if node.left:
             assert recursive_check(node.left, node) is True, "invalid child to parent relation"
         if node.right:
@@ -84,18 +85,18 @@ def test_create_node() -> None:
 
 
 def test_get_code() -> None:
-    n1 = hc.AdaptiveHuffmanNode(None, None, None)
-    n2 = hc.AdaptiveHuffmanNode(None, None, None, n1)
-    n3 = hc.AdaptiveHuffmanNode(None, None, None, n2)
-    n4 = hc.AdaptiveHuffmanNode(None, None, None, n3)
-    n5 = hc.AdaptiveHuffmanNode(None, None, None, n4)
+    n1 = Huffnode(None, None, None)
+    n2 = Huffnode(None, None, None, n1)
+    n3 = Huffnode(None, None, None, n2)
+    n4 = Huffnode(None, None, None, n3)
+    n5 = Huffnode(None, None, None, n4)
 
     n1.right = n2
     n2.left = n3
     n3.right = n4
     n4.right = n5
 
-    assert hc.codebook.get_huffman_code(n5) == "1011"
+    assert hcc.get_huffman_code(n5) == "1011"
 
 
 def test_symbol_weight_correctness(StringData: int, completed_tree: hc.AdaptiveHuffmanTree) -> None:
@@ -106,9 +107,9 @@ def test_symbol_weight_correctness(StringData: int, completed_tree: hc.AdaptiveH
 
 def test_set_node_weight() -> None:
     tree = hc.AdaptiveHuffmanTree()
-    node = hc.AdaptiveHuffmanNode(None, 1, 249)
+    node = Huffnode(None, 1, 249)
 
-    tree.weight_catalogue[2] = [hc.AdaptiveHuffmanNode(None, 2, 224), hc.AdaptiveHuffmanNode(None, 2, 250)]
+    tree.weight_catalogue[2] = [Huffnode(None, 2, 224), Huffnode(None, 2, 250)]
     tree.weight_catalogue[1] = [node]
 
     tree.increment_node_weight(node)

@@ -1,10 +1,10 @@
 import io
 from typing import Iterable, Generator
+
 from pyencoder.config import main_config
-from pyencoder.type_hints import Bitcode
 from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
 
-from pyencoder.AdaptiveHuffmanCoding.codebook import (
+from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import (
     AdaptiveHuffmanTree,
     FIXED_CODE_LOOKUP,
     FIXED_CODE_SIZE,
@@ -16,16 +16,16 @@ from pyencoder.AdaptiveHuffmanCoding.codebook import (
 class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
     def __init__(self) -> None:
         super().__init__()
-        self._iterable = self._encode()
-        self._iterable.send(None)
+        self.reset()
 
-    def encode(self, symbol: str) -> Bitcode:
+    def encode(self, symbol: str) -> str:
         return self._iterable.send(symbol)
 
-    def flush(self) -> Bitcode:
-        return self._iterable.send(main_config.EOF_MARKER)
+    def flush(self) -> str:
+        retval = self._iterable.send(main_config.EOF_MARKER)
+        return retval
 
-    def _encode(self) -> Generator[Bitcode, str, None]:
+    def _encode(self) -> Generator[str, str, None]:
         huffman_code = ""
         try:
             while True:
@@ -45,6 +45,12 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
 
         except Exception as err:
             raise Exception("error occured while encoding") from err
+
+    def reset(self) -> None:
+        super().reset()
+
+        self._iterable = self._encode()
+        self._iterable.send(None)
 
 
 encoder = AdaptiveHuffmanEncoder()

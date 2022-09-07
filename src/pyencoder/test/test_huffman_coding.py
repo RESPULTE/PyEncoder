@@ -1,5 +1,5 @@
 import tempfile
-import pyencoder.HuffmanCoding.io as HC
+import pyencoder.HuffmanCoding.StaticHuffmanCoding.io as HC
 
 
 def test_dump_and_load(StringData: str) -> None:

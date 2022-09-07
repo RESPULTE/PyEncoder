@@ -1,15 +1,7 @@
 import operator
 import heapq
 import collections
-from typing import List, NamedTuple, Tuple, Dict
-
-from pyencoder.type_hints import (
-    CorruptedHeaderError,
-    SupportedDataType,
-    ValidData,
-    ValidDataset,
-    Bitcode,
-)
+from typing import List, NamedTuple, Dict
 
 
 class HuffmanNode(NamedTuple):
@@ -25,7 +17,7 @@ class HuffmanNode(NamedTuple):
         )
 
 
-def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidData, Bitcode]:
+def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
     # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     counted_dataset = collections.Counter(dataset).most_common()
 
@@ -49,7 +41,7 @@ def generate_codebook_from_dataset(dataset: ValidDataset = None) -> Dict[ValidDa
     return codebook
 
 
-def generate_canonical_codebook(dataset: ValidDataset) -> Dict[ValidData, Bitcode]:
+def generate_canonical_codebook(dataset: str) -> Dict[str, str]:
     codebook = generate_codebook_from_dataset(dataset)
 
     # just to ensure that the very first value will be zero
