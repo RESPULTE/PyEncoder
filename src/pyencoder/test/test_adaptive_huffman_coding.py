@@ -3,7 +3,8 @@ import pyencoder.HuffmanCoding.AdaptiveHuffmanCoding as hc
 import pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook as hcc
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanNode as Huffnode
 
-import pyencoder.config.main_config as main_config
+from pyencoder import Config
+
 import uuid
 import pytest
 
@@ -11,7 +12,7 @@ import pytest
 @pytest.fixture
 def completed_tree(StringData) -> hc.AdaptiveHuffmanEncoder:
     encoder = hc.AdaptiveHuffmanEncoder()
-    for sym in StringData + main_config.EOF_MARKER:
+    for sym in StringData + Config["EOF_MARKER"]:
         encoder.encode(sym)
     return encoder
 

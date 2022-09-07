@@ -1,6 +1,6 @@
 from typing import Dict, Iterable, Literal, Type, TypeVar
 
-from pyencoder.config import main_config
+from pyencoder import Config
 
 # take in bytes
 # spits out an Iterable of choosing (str/int)
@@ -17,7 +17,7 @@ class Bitstring(str):
 
     def __init__(self, data: bytes, retval: Type[str] | Type[int]) -> None:
         try:
-            self.data = int.from_bytes(data, main_config.ENDIAN)
+            self.data = int.from_bytes(data, Config["ENDIAN"])
         except TypeError as err:
             raise TypeError(f"invalid type for bitstring: {type(data)}") from err
 

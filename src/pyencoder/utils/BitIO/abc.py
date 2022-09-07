@@ -1,9 +1,8 @@
 import abc
 from typing import BinaryIO, TypeVar
 
-from pyencoder.config.main_config import ENDIAN
-from pyencoder.utils.BitIO.config import BUFFER_BYTE_SIZE
-from pyencoder.utils.BitIO.bitstring import Bitstring
+from pyencoder import Config
+from pyencoder.utils.BitIO import BUFFER_BYTE_SIZE
 
 _T = TypeVar("_T")
 
@@ -50,10 +49,10 @@ class IBufferedIntegerIO(IBufferedBitIO):
         self.buffered_size += self.bit_buffer_size
 
     def _convert_to_bytes(self, bits: int) -> bytes:
-        return int.to_bytes(bits, self.byte_buffer_size, ENDIAN)
+        return int.to_bytes(bits, self.byte_buffer_size, Config["ENDIAN"])
 
     def _convert_from_bytes(self, _bytes: bytes) -> int:
-        return int.from_bytes(_bytes, ENDIAN)
+        return int.from_bytes(_bytes, Config["ENDIAN"])
 
 
 class IBufferedStringIO(IBufferedBitIO):
@@ -72,7 +71,7 @@ class IBufferedStringIO(IBufferedBitIO):
         self.buffered_size += len(bits)
 
     def _convert_to_bytes(self, bits: str) -> bytes:
-        return int.to_bytes(int(bits, 2), self.byte_buffer_size, ENDIAN)
+        return int.to_bytes(int(bits, 2), self.byte_buffer_size, Config["ENDIAN"])
 
     def _convert_from_bytes(self, _bytes: bytes) -> str:
-        return "{num:0{bit_size}b}".format(num=int.from_bytes(_bytes, ENDIAN), bit_size=self.bit_buffer_size)
+        return "{num:0{bit_size}b}".format(num=int.from_bytes(_bytes, Config["ENDIAN"]), bit_size=self.bit_buffer_size)

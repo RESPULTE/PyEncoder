@@ -1,4 +1,6 @@
+from pyencoder import Config
+
+
 class Settings:
-    MAX_CODELENGTH = 16
-    CODELENGTH_BITSIZE = 8
-    SYMBOL_BITSIZE = 8
+    NUM_CODELENGTH = Config["HuffmanCoding"]["NUM_CODELENGTH"]
+    CODELENGTH_BITSIZE = Config["HuffmanCoding"]["CODELENGTH_BITSIZE"]

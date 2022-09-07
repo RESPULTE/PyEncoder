@@ -2,7 +2,7 @@ from pyencoder import Config
 
 
 class Settings:
-    PRECISION = Config["ArithmeticCoding"]["precision"]
+    PRECISION = Config["ArithmeticCoding"]["PRECISION"]
 
     FULL_RANGE = 1 << PRECISION
     HALF_RANGE = FULL_RANGE >> 1

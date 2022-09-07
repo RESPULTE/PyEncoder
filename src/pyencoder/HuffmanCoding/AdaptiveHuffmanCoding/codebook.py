@@ -5,12 +5,11 @@ import dataclasses
 import collections as colt
 from typing import Dict, List
 
+from pyencoder import Config
 
-import pyencoder.config.main_config as main_config
 
-
-FIXED_CODE_SIZE = math.ceil(math.log2(main_config.NUM_SYMBOLS))
-FIXED_CODE_LOOKUP = {k: "{num:0{size}b}".format(num=i, size=FIXED_CODE_SIZE) for i, k in enumerate(main_config.SYMBOLS)}
+FIXED_CODE_SIZE = math.ceil(math.log2(Config["NUM_SYMBOLS"]))
+FIXED_CODE_LOOKUP = {k: "{num:0{size}b}".format(num=i, size=FIXED_CODE_SIZE) for i, k in enumerate(Config["SYMBOLS"])}
 FIXED_SYMBOL_LOOKUP = {v: k for k, v in FIXED_CODE_LOOKUP.items()}
 
 
@@ -95,7 +94,7 @@ class AdaptiveHuffmanTree:
     def reset(self) -> None:
         self.symbol_catalogue: Dict[str, AdaptiveHuffmanNode] = {}
         self.weight_catalogue: colt.OrderedDict[int, List[AdaptiveHuffmanNode]] = colt.OrderedDict({1: []})
-        self.order_index = 2 * main_config.NUM_SYMBOLS - 1
+        self.order_index = 2 * Config["NUM_SYMBOLS"] - 1
 
         self.root = self.NYT = AdaptiveHuffmanNode(None, 0, self.order_index)
 

@@ -3,7 +3,7 @@ import io
 from typing import BinaryIO, Union, Literal, Iterable
 
 from pyencoder.utils.BitIO.abc import IBufferedBitIO, IBufferedIntegerIO, IBufferedStringIO
-from pyencoder.utils.BitIO.config import BUFFER_BYTE_SIZE
+from pyencoder.utils.BitIO import BUFFER_BYTE_SIZE
 
 
 class IBufferedBitInput(IBufferedBitIO):

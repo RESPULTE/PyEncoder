@@ -1,7 +1,7 @@
 import io
 from typing import Iterable, Generator
 
-from pyencoder.config import main_config
+from pyencoder import Config
 from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
 
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import (
@@ -22,7 +22,7 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
         return self._iterable.send(symbol)
 
     def flush(self) -> str:
-        retval = self._iterable.send(main_config.EOF_MARKER)
+        retval = self._iterable.send(Config["EOF_MARKER"])
         return retval
 
     def _encode(self) -> Generator[str, str, None]:
@@ -67,7 +67,7 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
         while True:
 
             symbol = next(symbol_getter)
-            if symbol is main_config.EOF_MARKER:
+            if symbol is Config["EOF_MARKER"]:
                 break
 
             if symbol in self.symbol_catalogue:

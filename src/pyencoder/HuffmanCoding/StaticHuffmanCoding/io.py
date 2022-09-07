@@ -23,23 +23,23 @@ def read_codelengths(bindata) -> List[int]:
 
 def read_symbols(bindata) -> List[str]:
     all_symbols = []
-    for i in range(0, len(bindata), Settings.SYMBOL_BITSIZE):
-        bin_symbol = bindata[i : i + Settings.SYMBOL_BITSIZE]
+    for i in range(0, len(bindata), Config["SYMBOL_BITSIZE"]):
+        bin_symbol = bindata[i : i + Config["SYMBOL_BITSIZE"]]
         all_symbols.append(chr(int(bin_symbol, 2)))
 
     return all_symbols
 
 
 def generate_codebook_from_header(bitstream: BufferedStringInput) -> Dict[str, str]:
-    bin_codelengths = bitstream.read(Settings.CODELENGTH_BITSIZE * Settings.MAX_CODELENGTH)
+    bin_codelengths = bitstream.read(Settings.CODELENGTH_BITSIZE * Settings.NUM_CODELENGTH)
     num_symbols_per_codelength = read_codelengths(bin_codelengths)
 
-    if len(num_symbols_per_codelength) != Settings.MAX_CODELENGTH:
+    if len(num_symbols_per_codelength) != Settings.NUM_CODELENGTH:
         err_msg = "size of codelength's data ({0}) does not match default codelength's data size ({1})"
-        raise CorruptedHeaderError(err_msg.format(len(num_symbols_per_codelength), Settings.MAX_CODELENGTH))
+        raise CorruptedHeaderError(err_msg.format(len(num_symbols_per_codelength), Settings.NUM_CODELENGTH))
 
     num_symbols = sum(num_symbols_per_codelength)
-    bin_symbols = bitstream.read(num_symbols * Settings.SYMBOL_BITSIZE)
+    bin_symbols = bitstream.read(num_symbols * Config["SYMBOL_BITSIZE"])
     all_symbols = read_symbols(bin_symbols)
 
     if len(all_symbols) != num_symbols:
@@ -64,14 +64,14 @@ def generate_codebook_from_header(bitstream: BufferedStringInput) -> Dict[str, s
 
 
 def generate_header_from_codebook(codebook: Dict[str, str]) -> str:
-    codelengths = ["0" * Settings.CODELENGTH_BITSIZE for _ in range(Settings.MAX_CODELENGTH)]
+    codelengths = ["0" * Settings.CODELENGTH_BITSIZE for _ in range(Settings.NUM_CODELENGTH)]
     counted_codelengths = collections.Counter([len(code) for code in codebook.values()])
 
     for length, count in counted_codelengths.items():
         codelengths[length - 1] = "{0:0{bitlen}b}".format(count, bitlen=Settings.CODELENGTH_BITSIZE)
 
     codelengths = "".join(codelengths)
-    symbols = "".join("{0:0{num}b}".format(ord(sym), num=Settings.SYMBOL_BITSIZE) for sym in codebook.keys())
+    symbols = "".join("{0:0{num}b}".format(ord(sym), num=Config["SYMBOL_BITSIZE"]) for sym in codebook.keys())
 
     return codelengths + symbols
 
@@ -79,7 +79,7 @@ def generate_header_from_codebook(codebook: Dict[str, str]) -> str:
 def dump(input_source: str | TextIO, output_source: BinaryIO) -> None:
     bitstream = BufferedBitOutput(output_source)
 
-    sof_marker = "{0:0{num}b}".format(ord(Config["SOF_MARKER"]), num=Settings.SYMBOL_BITSIZE)
+    sof_marker = "{0:0{num}b}".format(ord(Config["SOF_MARKER"]), num=Config["SYMBOL_BITSIZE"])
     bitstream.write(sof_marker)
 
     if not isinstance(input_source, str):
@@ -101,7 +101,7 @@ def dump(input_source: str | TextIO, output_source: BinaryIO) -> None:
 def load(input_source: BinaryIO, output_source: TextIO = None) -> None | str:
     bitstream = BufferedBitInput(input_source)
 
-    bin_sof_marker = bitstream.read(Settings.SYMBOL_BITSIZE)
+    bin_sof_marker = bitstream.read(Config["SYMBOL_BITSIZE"])
     if chr(int(bin_sof_marker, 2)) != Config["SOF_MARKER"]:
         raise CorruptedEncodingError("invalid SOF marker")
 
