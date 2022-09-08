@@ -8,19 +8,18 @@ from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import Arithmeti
 
 
 def encode(dataset: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
+    dataset += Config["EOF_MARKER"]
+
     codebook = ArithmeticCodebook.from_dataset(dataset)
 
     lower_limit = 0
     upper_limit = Settings.FULL_RANGE_BITMASK
 
-    index = 0
-    end_index = len(dataset)
     encoded_data = ""
     num_pending_bits = 0
     total_elems = codebook.total_elems
 
-    while index <= end_index:
-        sym = dataset[index] if index < end_index else Config["EOF_MARKER"]
+    for sym in dataset:
         sym_low, sym_high = codebook[sym]
 
         current_range = upper_limit - lower_limit + 1
@@ -50,8 +49,6 @@ def encode(dataset: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
             lower_limit &= Settings.FULL_RANGE_BITMASK
             upper_limit &= Settings.FULL_RANGE_BITMASK
 
-        index += 1
-
     bit = 0 if lower_limit < Settings.QUARTER_RANGE else 1
     encoded_data += f"{bit}{str(bit ^ 1) * (num_pending_bits + 1)}"
 
@@ -60,12 +57,10 @@ def encode(dataset: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
 
 def decode(bindata: str, codebook: ArithmeticCodebook) -> str:
     lower_limit = 0
-    code_values = 0
     upper_limit = Settings.FULL_RANGE_BITMASK
 
-    bitstream = BufferedBitInput(bindata, as_int=True)
-    for _ in range(Settings.PRECISION):
-        code_values = (code_values << 1) + bitstream.read(1)
+    bitstream = BufferedBitInput(bindata, as_int=True, default_value=0)
+    code_values = bitstream.read(Settings.PRECISION)
 
     decoded_data = []
     total_elems = codebook.total_elems
@@ -74,7 +69,7 @@ def decode(bindata: str, codebook: ArithmeticCodebook) -> str:
         current_range = upper_limit - lower_limit + 1
         scaled_code_value = ((code_values - lower_limit + 1) * total_elems - 1) // current_range
 
-        sym, (sym_low, sym_high) = codebook.search_symbol(codebook, scaled_code_value)
+        sym, (sym_low, sym_high) = codebook.search_symbol(scaled_code_value)
 
         if sym == Config["EOF_MARKER"]:
             break
@@ -108,6 +103,6 @@ def decode(bindata: str, codebook: ArithmeticCodebook) -> str:
 
             lower_limit = lower_limit << 1
             upper_limit = (upper_limit << 1) + 1
-            code_values = (code_values << 1) + bitstream.read(1) or 0
+            code_values = (code_values << 1) + bitstream.read(1)
 
     return decoded_data

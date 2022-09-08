@@ -1,41 +1,45 @@
-import abc
-import io
+import functools
 from typing import BinaryIO, Union, Literal, Iterable
 
 from pyencoder.utils.BitIO.abc import IBufferedBitIO, IBufferedIntegerIO, IBufferedStringIO
-from pyencoder.utils.BitIO import BUFFER_BYTE_SIZE
+from pyencoder.utils.binary import slice_read
+from pyencoder.utils.BitIO import BUFFER_BITSIZE
 
 
 class IBufferedBitInput(IBufferedBitIO):
-    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE) -> None:
+    def __init__(self, source_obj: BinaryIO | str | bytes, buffer_size: int = BUFFER_BITSIZE) -> None:
         super().__init__(source_obj, buffer_size)
 
         if hasattr(self.source_obj, "read"):
-            self.bits_reader = self.read_from_file()
+            self.source_reader = functools.partial(self.source_obj.read, buffer_size // 8)
 
-        elif isinstance(source_obj, str):
-            self.bits_reader = self.read_from_bits()
+        elif isinstance(self.source_obj, str):
+            reader = functools.partial(slice_read, self.source_obj, self.buffer_size)()
+            self.source_reader = lambda: next(reader)
 
-        elif isinstance(source_obj, bytes):
-            self.bits_reader = self.read_from_bytes()
+        elif isinstance(self.source_obj, bytes):
+            reader = functools.partial(slice_read, self.source_obj, buffer_size // 8)()
+            self.source_reader = lambda: next(reader)
 
         else:
-            raise TypeError(f"invalid type for source object: {type(self.source_obj).__name__}")
+            raise TypeError("invalid type: {0}".format(type(self.source_obj).__name__))
 
     def read(self, n: int) -> int | str:
         # if reading process is finished
         if self._flushed or n <= 0:
-            return None
+            return self.default_value
 
         # if the bits left in the buffer is more than the requested amount
-        if n < self.buffered_size:
+        if n <= self.buffered_size:
             return self._read_from_buffer(n)
 
         while self.buffered_size < n:
-            buffered_bits = next(self.bits_reader)
-            if not buffered_bits:
+            source_data = self.source_reader()
+
+            if not source_data:
                 return self.flush()
 
+            buffered_bits = self._convert_to_retval(source_data)
             self.update_buffer(buffered_bits)
 
         return self._read_from_buffer(n)
@@ -46,7 +50,7 @@ class IBufferedBitInput(IBufferedBitIO):
         self._flushed = True
         return retval
 
-    def update_buffer(self, bits: str) -> None:
+    def update_buffer(self, bits: str | int) -> None:
         # if the current buffer still hasn't been exhausted
         if self.buffered_size:
             self._write_to_buffer(bits)
@@ -54,81 +58,29 @@ class IBufferedBitInput(IBufferedBitIO):
 
         # if the current buffer has been exhausted
         self.buffered_bits = bits
-        self.buffered_size = self.bit_buffer_size
+        self.buffered_size = len(bits)
 
-    def read_from_file(self) -> str:
-        while True:
-            byte = self.source_obj.read(self.byte_buffer_size)
-            byte_size = len(byte)
-
-            if byte_size == 0:
-                yield ""
-
-            elif byte_size < self.byte_buffer_size:
-                self.byte_buffer_size = byte_size
-                self.bit_buffer_size = byte_size * 8
-
-            yield self._convert_from_bytes(byte)
-
-    def read_from_bytes(self) -> str:
-        index = 0
-        reading = True
-        while reading:
-
-            byte_slice = self.source_obj[index : index + self.byte_buffer_size]
-            byte_size = len(byte_slice)
-
-            if byte_size == 0:
-                yield ""
-
-            elif byte_size < self.byte_buffer_size:
-                self.byte_buffer_size = byte_size
-                self.bit_buffer_size = byte_size * 8
-
-            yield self._convert_from_bytes(byte_slice)
-
-            index += self.byte_buffer_size
-
-    def read_from_bits(self) -> str:
-        index = 0
-        reading = True
-        while reading:
-
-            bit_slice = self.source_obj[index : index + self.bit_buffer_size]
-            bit_size = len(bit_slice)
-
-            if bit_size == 0:
-                yield ""
-
-            elif bit_size < self.bit_buffer_size:
-                self.byte_buffer_size = bit_size // 8
-                self.bit_buffer_size = bit_size
-
-            yield bit_slice
-
-            index += self.bit_buffer_size
+    def _convert_to_retval(self, data: bytes | str) -> str | int:
+        ...
 
     def __bool__(self) -> bool:
         return not self._flushed
 
-    @abc.abstractmethod
-    def _convert_from_bytes(self, _bytes: bytes) -> str | int:
-        ...
-
 
 def BufferedBitInput(
-    source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE, as_int: bool = False
+    source_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE, as_int: bool = False, default_value: str | int = None
 ) -> Union["BufferedIntegerInput", "BufferedStringInput"]:
     if isinstance(source_obj, (BufferedIntegerInput, BufferedStringInput)):
         return source_obj
 
     cls = BufferedStringInput if not as_int else BufferedIntegerInput
-    return cls(source_obj, buffer_size)
+    return cls(source_obj, buffer_size, default_value)
 
 
 class BufferedStringInput(IBufferedStringIO, IBufferedBitInput):
-    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE) -> None:
+    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE, default_value: str = None) -> None:
         super().__init__(source_obj, buffer_size)
+        self.default_value = default_value
 
     def __iter__(self) -> Iterable[Literal["0", "1"]]:
         # python automatically converts bytes into a sequence of 8 bit integer when it is iterated
@@ -139,8 +91,9 @@ class BufferedStringInput(IBufferedStringIO, IBufferedBitInput):
 
 
 class BufferedIntegerInput(IBufferedIntegerIO, IBufferedBitInput):
-    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE) -> None:
+    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE, default_value: int = None) -> None:
         super().__init__(source_obj, buffer_size)
+        self.default_value = default_value
 
     def __iter__(self) -> Iterable[Literal[0, 1]]:
         # python automatically converts bytes into a sequence of 8 bit integer when it is iterated

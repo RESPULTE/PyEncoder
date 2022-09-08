@@ -1,18 +1,16 @@
 import abc
-from typing import BinaryIO, TypeVar
+from typing import BinaryIO
 
-from pyencoder import Config
-from pyencoder.utils.BitIO import BUFFER_BYTE_SIZE
+from pyencoder.utils.BitIO import BUFFER_BITSIZE
+from pyencoder.utils.bitstring import BitInteger
 
-_T = TypeVar("_T")
+from pyencoder.utils.binary import *
 
 
 class IBufferedBitIO(abc.ABC):
-    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE) -> None:
+    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE) -> None:
         self.source_obj = source_obj
-
-        self.byte_buffer_size = buffer_size
-        self.bit_buffer_size = buffer_size * 8
+        self.buffer_size = buffer_size
 
         self.buffered_size = 0
         self.buffered_bits = None
@@ -33,32 +31,40 @@ class IBufferedBitIO(abc.ABC):
 
 
 class IBufferedIntegerIO(IBufferedBitIO):
-    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE) -> None:
+    def __init__(self, source_obj: BinaryIO | bytes | str, buffer_size: int = BUFFER_BITSIZE) -> None:
         super().__init__(source_obj, buffer_size)
-        self.buffered_bits = 0
+        self.buffered_bits = BitInteger("0")
 
-    def _read_from_buffer(self, n: int) -> int:
-        index_from_left = self.buffered_size - n
-        retval = (self.buffered_bits & (((1 << n) - 1) << index_from_left)) >> index_from_left
-        self.buffered_bits = self.buffered_bits & ((1 << index_from_left) - 1)
+    def _convert_to_retval(self, data: bytes | str) -> BitInteger:
+        return BitInteger(data)
+
+    def _convert_to_bytes(self, data: BitInteger) -> bytes:
+        return convert_ints_to_bytes(data, data.size)
+
+    def _read_from_buffer(self, n: int) -> BitInteger:
+        retval, self.buffered_bits = self.buffered_bits.lslice(n)
         self.buffered_size -= n
         return retval
 
     def _write_to_buffer(self, bits: int) -> None:
-        self.buffered_bits = (self.buffered_bits << self.bit_buffer_size) | bits
-        self.buffered_size += self.bit_buffer_size
-
-    def _convert_to_bytes(self, bits: int) -> bytes:
-        return int.to_bytes(bits, self.byte_buffer_size, Config["ENDIAN"])
-
-    def _convert_from_bytes(self, _bytes: bytes) -> int:
-        return int.from_bytes(_bytes, Config["ENDIAN"])
+        bits_size = len(bits)
+        self.buffered_bits = (self.buffered_bits << bits_size) | bits
+        self.buffered_size += bits_size
 
 
 class IBufferedStringIO(IBufferedBitIO):
-    def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BYTE_SIZE) -> None:
+    def __init__(self, source_obj: BinaryIO | str | bytes, buffer_size: int = BUFFER_BITSIZE) -> None:
         super().__init__(source_obj, buffer_size)
         self.buffered_bits = ""
+
+        if isinstance(source_obj, str):
+            self._convert_to_retval = lambda x: x
+
+    def _convert_to_retval(self, data: str | bytes) -> str:
+        return convert_bytes_to_bits(data, len(data) * 8)
+
+    def _convert_to_bytes(self, data: str) -> bytes:
+        return convert_bits_to_bytes(data, -(-len(data) // 8))
 
     def _read_from_buffer(self, n: int) -> str:
         self.buffered_size -= n
@@ -69,9 +75,3 @@ class IBufferedStringIO(IBufferedBitIO):
     def _write_to_buffer(self, bits: str) -> None:
         self.buffered_bits += bits
         self.buffered_size += len(bits)
-
-    def _convert_to_bytes(self, bits: str) -> bytes:
-        return int.to_bytes(int(bits, 2), self.byte_buffer_size, Config["ENDIAN"])
-
-    def _convert_from_bytes(self, _bytes: bytes) -> str:
-        return "{num:0{bit_size}b}".format(num=int.from_bytes(_bytes, Config["ENDIAN"]), bit_size=self.bit_buffer_size)

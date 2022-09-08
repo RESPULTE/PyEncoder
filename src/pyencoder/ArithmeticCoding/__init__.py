@@ -11,6 +11,8 @@ class Settings:
 
     FULL_RANGE_BITMASK = FULL_RANGE - 1
 
+    MAX_FREQUENCY = (1 << 16) - 1
+
     def __setattr__(self, __name: str, __value: int) -> None:
         if __name != "PRECISION":
             raise Exception("cannot alter const")

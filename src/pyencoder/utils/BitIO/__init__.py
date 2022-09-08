@@ -1,4 +1,4 @@
-BUFFER_BYTE_SIZE = 8
+BUFFER_BITSIZE = 64
 
 from .input import BufferedBitInput
 from .output import BufferedBitOutput

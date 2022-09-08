@@ -10,7 +10,6 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
     if output_file:
         for symbol in decode(input_file):
             output_file.write(symbol)
-            print(symbol)
         return None
 
     return "".join(decode(input_file))

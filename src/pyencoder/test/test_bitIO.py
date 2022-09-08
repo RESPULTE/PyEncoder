@@ -47,7 +47,7 @@ def test_int_read_iter(StringData: str) -> None:
     assert "".join(output) == StringData
 
 
-@pytest.mark.parametrize("n", [1, 3, 7, 10, 20, 100])
+@pytest.mark.parametrize("n", [1, 3, 7, 10, 20, 64, 100])
 def test_str_read(StringData: str, n: int) -> None:
     with tempfile.TemporaryFile() as tmp:
         tmp.write(StringData.encode("ascii"))
@@ -59,12 +59,12 @@ def test_str_read(StringData: str, n: int) -> None:
         buffer = ""
         output = []
         while True:
-            new_bit = reader.read(n)
-            if not new_bit:
+            new_bits = reader.read(n)
+            if not new_bits:
                 break
 
-            buffer += new_bit
-            buffer_size += len(new_bit)
+            buffer += new_bits
+            buffer_size += len(new_bits)
 
             while buffer_size >= 8:
                 buffer, symbol_bits = buffer[8:], buffer[:8]
@@ -74,7 +74,7 @@ def test_str_read(StringData: str, n: int) -> None:
     assert "".join(output) == StringData
 
 
-@pytest.mark.parametrize("n", [1])
+@pytest.mark.parametrize("n", [1, 3, 7, 10, 20, 64, 100])
 def test_int_read(StringData: str, n: int) -> None:
     with tempfile.TemporaryFile() as tmp:
         tmp.write(StringData.encode("ascii"))
@@ -86,18 +86,20 @@ def test_int_read(StringData: str, n: int) -> None:
         buffer = 0
         output = []
         while True:
-            new_bit = reader.read(n)
-            if new_bit == None:
+            new_bits = reader.read(n)
+            if new_bits == None:
                 break
 
-            buffer = (buffer << n) | new_bit
-            buffer_size += n
+            size = len(new_bits)
+            buffer = (buffer << size) | new_bits
+            buffer_size += size
 
             while buffer_size >= 8:
                 i = buffer_size - 8
                 symbol_bits = (buffer & (((1 << 8) - 1) << i)) >> i
                 buffer = buffer & ((1 << i) - 1)
-                output.append(chr(symbol_bits))
+                new_symbol = chr(symbol_bits)
+                output.append(new_symbol)
                 buffer_size -= 8
 
     assert "".join(output) == StringData

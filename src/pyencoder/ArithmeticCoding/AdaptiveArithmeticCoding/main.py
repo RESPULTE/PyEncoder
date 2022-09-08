@@ -82,10 +82,9 @@ class AdaptiveArithmeticDecoder:
         self.reset()
 
     def decode(self, bindata: str) -> Iterable[str]:
-        bitstream = BufferedBitInput(bindata, Settings.PRECISION // 8, as_int=True)
+        bitstream = BufferedBitInput(bindata, as_int=True)
 
-        for _ in range(Settings.PRECISION):
-            self.code_values = (self.code_values << 1) + bitstream.read(1)
+        self.code_values = bitstream.read(Settings.PRECISION)
 
         while True:
             current_range = self.upper_limit - self.lower_limit + 1

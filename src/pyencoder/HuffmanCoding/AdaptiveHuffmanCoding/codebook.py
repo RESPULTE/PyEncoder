@@ -5,6 +5,7 @@ import dataclasses
 import collections as colt
 from typing import Dict, List
 
+
 from pyencoder import Config
 
 
