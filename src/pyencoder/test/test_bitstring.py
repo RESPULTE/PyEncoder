@@ -1,6 +1,5 @@
 import pytest
 
-from typing import Type
 from pyencoder.utils.bitstring import BitInteger
 
 

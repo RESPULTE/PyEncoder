@@ -1,6 +1,6 @@
 import bisect
 import collections
-from typing import List, Tuple
+from typing import Dict, Iterable, List, Tuple
 
 from pyencoder.ArithmeticCoding import Settings
 
@@ -14,11 +14,15 @@ class ArithmeticCodebook(collections.OrderedDict):
 
     @classmethod
     def from_dataset(cls, dataset: str) -> "ArithmeticCodebook":
-        counted_symbols = collections.Counter(dataset).most_common()
+        counted_dataset = collections.OrderedDict(collections.Counter(dataset).most_common())
+        return cls.from_counted_dataset(counted_dataset)
+
+    @classmethod
+    def from_counted_dataset(cls, counted_dataset: collections.OrderedDict[str, int]) -> "ArithmeticCodebook":
         cummulative_proabability = 0
         codebook = cls()
 
-        for sym, count in counted_symbols:
+        for sym, count in counted_dataset.items():
             sym_lower_limit = cummulative_proabability
             sym_upper_limit = cummulative_proabability + min(count, Settings.MAX_FREQUENCY)
 

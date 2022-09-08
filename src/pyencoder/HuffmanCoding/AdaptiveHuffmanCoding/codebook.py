@@ -1,17 +1,10 @@
-import math
 import operator
 import bisect
 import dataclasses
 import collections as colt
 from typing import Dict, List
 
-
 from pyencoder import Config
-
-
-FIXED_CODE_SIZE = math.ceil(math.log2(Config["NUM_SYMBOLS"]))
-FIXED_CODE_LOOKUP = {k: "{num:0{size}b}".format(num=i, size=FIXED_CODE_SIZE) for i, k in enumerate(Config["SYMBOLS"])}
-FIXED_SYMBOL_LOOKUP = {v: k for k, v in FIXED_CODE_LOOKUP.items()}
 
 
 @dataclasses.dataclass

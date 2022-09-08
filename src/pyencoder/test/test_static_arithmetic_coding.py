@@ -3,10 +3,9 @@ import pytest
 import pyencoder.ArithmeticCoding.StaticArithmeticCoding as SAC
 
 
-@pytest.mark.xfail
 def test_dump_and_load(StringData: str) -> None:
     with tempfile.TemporaryFile(mode="r+") as txt_file:
-        txt_file.write("Never Gonna Give")
+        txt_file.write(StringData)
         txt_file.flush()
         txt_file.seek(0)
 

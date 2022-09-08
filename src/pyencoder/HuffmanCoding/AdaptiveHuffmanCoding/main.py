@@ -4,13 +4,7 @@ from typing import Iterable, Generator
 from pyencoder import Config
 from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
 
-from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import (
-    AdaptiveHuffmanTree,
-    FIXED_CODE_LOOKUP,
-    FIXED_CODE_SIZE,
-    FIXED_SYMBOL_LOOKUP,
-    get_huffman_code,
-)
+from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanTree, get_huffman_code
 
 
 class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
@@ -35,7 +29,7 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
                     huffman_code = get_huffman_code(node)
 
                 else:
-                    huffman_code = get_huffman_code(self.NYT) + FIXED_CODE_LOOKUP[symbol]
+                    huffman_code = get_huffman_code(self.NYT) + Config["FIXED_CODE_LOOKUP"][symbol]
 
                     node = self.create_node(symbol)
                     if node.parent and not node.parent.is_root:
@@ -83,7 +77,7 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
             yield symbol
 
     def get_symbol(self, bitstream: BufferedStringInput) -> Iterable[str]:
-        yield FIXED_SYMBOL_LOOKUP[bitstream.read(FIXED_CODE_SIZE)]
+        yield Config["FIXED_SYMBOL_LOOKUP"][bitstream.read(Config["FIXED_CODE_SIZE"])]
 
         current_node = self.root
         while True:
@@ -97,7 +91,7 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
                 raise ValueError(f"invalid bit found: {new_bit}")
 
             if current_node is self.NYT:
-                symbol = FIXED_SYMBOL_LOOKUP[bitstream.read(FIXED_CODE_SIZE)]
+                symbol = Config["FIXED_SYMBOL_LOOKUP"][bitstream.read(Config["FIXED_CODE_SIZE"])]
                 current_node = self.root
                 yield symbol
 

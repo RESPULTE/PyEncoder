@@ -2,16 +2,16 @@ from typing import Iterable
 from pyencoder import Config
 
 
-def convert_bits_to_bytes(bits: str, size: int) -> bytes:
-    return int.to_bytes(int(bits, 2), size, Config["ENDIAN"])
+def convert_bits_to_bytes(bits: str, size: int = 0) -> bytes:
+    return int.to_bytes(int(bits, 2), size or -(-len(bits) // 8), Config["ENDIAN"])
 
 
-def convert_bytes_to_bits(_bytes: bytes, size: int) -> str:
+def convert_bytes_to_bits(_bytes: bytes, size: int = 0) -> str:
     return "{num:0{bit_size}b}".format(num=int.from_bytes(_bytes, Config["ENDIAN"]), bit_size=size)
 
 
-def convert_ints_to_bytes(_ints: int, size: int) -> bytes:
-    return int.to_bytes(_ints, size, Config["ENDIAN"])
+def convert_ints_to_bytes(_ints: int, size: int = 0) -> bytes:
+    return int.to_bytes(_ints, size or -(-_ints.bit_length() // 8), Config["ENDIAN"])
 
 
 def convert_bytes_to_ints(_bytes: bytes) -> int:
