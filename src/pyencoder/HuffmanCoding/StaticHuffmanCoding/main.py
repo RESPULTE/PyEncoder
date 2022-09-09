@@ -1,6 +1,6 @@
 from typing import Tuple, Dict
 
-from pyencoder import Config
+from pyencoder import Settings
 from pyencoder.utils.BitIO import BufferedBitInput
 from pyencoder.HuffmanCoding.StaticHuffmanCoding.codebook import generate_canonical_codebook
 
@@ -18,7 +18,7 @@ def decode(codebook: Dict[str, str], encoded_data: str) -> str:
             continue
 
         symbol = codebook[curr_code]
-        if symbol == Config["EOF_MARKER"]:
+        if symbol == Settings.EOF_MARKER:
             break
 
         decoded_data += symbol

@@ -1,10 +1,10 @@
 import operator
 import bisect
 import dataclasses
-import collections as colt
+import collections
 from typing import Dict, List
 
-from pyencoder import Config
+from pyencoder import Settings
 
 
 @dataclasses.dataclass
@@ -87,8 +87,10 @@ class AdaptiveHuffmanTree:
 
     def reset(self) -> None:
         self.symbol_catalogue: Dict[str, AdaptiveHuffmanNode] = {}
-        self.weight_catalogue: colt.OrderedDict[int, List[AdaptiveHuffmanNode]] = colt.OrderedDict({1: []})
-        self.order_index = 2 * Config["NUM_SYMBOLS"] - 1
+        self.weight_catalogue: collections.OrderedDict[int, List[AdaptiveHuffmanNode]] = collections.OrderedDict(
+            {1: []}
+        )
+        self.order_index = 2 * Settings.NUM_SYMBOLS - 1
 
         self.root = self.NYT = AdaptiveHuffmanNode(None, 0, self.order_index)
 

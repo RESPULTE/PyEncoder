@@ -1,13 +1,12 @@
 from collections import OrderedDict
 from typing import BinaryIO, TextIO
 
-from pyencoder import Config
+from pyencoder import Settings
 from pyencoder.utils.BitIO.output import BufferedBitOutput
 from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
 
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.main import decode, encode
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import ArithmeticCodebook
-from pyencoder.ArithmeticCoding import Settings
 
 
 def load(input_file: BinaryIO, output_file: TextIO | None) -> None | str:
@@ -39,8 +38,8 @@ def generate_header_from_codebook(codebook: ArithmeticCodebook) -> str:
     header = ""
 
     for sym, (sym_low, sym_high) in codebook.items():
-        sym_code = Config["FIXED_CODE_LOOKUP"][sym]
-        count_code = "{0:0{num}b}".format(sym_high - sym_low, num=Settings.MAX_FREQUENCY.bit_length())
+        sym_code = Settings.FIXED_CODE_LOOKUP[sym]
+        count_code = "{0:0{num}b}".format(sym_high - sym_low, num=Settings.ArithmeticCoding.MAX_FREQUENCY.bit_length())
 
         header += sym_code + count_code
 
@@ -54,11 +53,11 @@ def generate_codebook_from_header(bitstream: BufferedStringInput) -> ArithmeticC
     codebook = OrderedDict()
     while True:
 
-        code = bitstream.read(Config["FIXED_CODE_SIZE"])
-        count = bitstream.read(Settings.MAX_FREQUENCY.bit_length())
+        code = bitstream.read(Settings.FIXED_CODE_SIZE)
+        count = bitstream.read(Settings.ArithmeticCoding.MAX_FREQUENCY.bit_length())
 
-        symbol = Config["FIXED_SYMBOL_LOOKUP"][code]
+        symbol = Settings.FIXED_SYMBOL_LOOKUP[code]
         codebook[symbol] = int(count, 2)
 
-        if symbol == Config["EOF_MARKER"]:
+        if symbol == Settings.EOF_MARKER:
             return ArithmeticCodebook.from_counted_dataset(codebook)

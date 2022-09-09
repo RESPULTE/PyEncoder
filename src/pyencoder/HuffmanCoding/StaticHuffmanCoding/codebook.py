@@ -18,7 +18,6 @@ class HuffmanNode(NamedTuple):
 
 
 def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
-    # putting the symbol in a list to allow concatenation for 'int' and 'float' during the 'tree building process'
     counted_dataset = collections.Counter(dataset).most_common()
 
     if len(counted_dataset) == 1:

@@ -1,19 +1,18 @@
 import collections
+import uuid
+import pytest
+
 import pyencoder.HuffmanCoding.AdaptiveHuffmanCoding as hc
 import pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook as hcc
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanNode as Huffnode
-
-from pyencoder import Config
-
-import uuid
-import pytest
 
 
 @pytest.fixture
 def completed_tree(StringData) -> hc.AdaptiveHuffmanEncoder:
     encoder = hc.AdaptiveHuffmanEncoder()
-    for sym in StringData + Config["EOF_MARKER"]:
+    for sym in StringData:
         encoder.encode(sym)
+    encoder.flush()
     return encoder
 
 

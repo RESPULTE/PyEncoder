@@ -1,7 +1,7 @@
 import io
 from typing import Iterable, Generator
 
-from pyencoder import Config
+from pyencoder import Settings
 from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
 
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanTree, get_huffman_code
@@ -16,7 +16,7 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
         return self._iterable.send(symbol)
 
     def flush(self) -> str:
-        retval = self._iterable.send(Config["EOF_MARKER"])
+        retval = self._iterable.send(Settings.EOF_MARKER)
         return retval
 
     def _encode(self) -> Generator[str, str, None]:
@@ -29,7 +29,7 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
                     huffman_code = get_huffman_code(node)
 
                 else:
-                    huffman_code = get_huffman_code(self.NYT) + Config["FIXED_CODE_LOOKUP"][symbol]
+                    huffman_code = get_huffman_code(self.NYT) + Settings.FIXED_CODE_LOOKUP[symbol]
 
                     node = self.create_node(symbol)
                     if node.parent and not node.parent.is_root:
@@ -61,7 +61,7 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
         while True:
 
             symbol = next(symbol_getter)
-            if symbol is Config["EOF_MARKER"]:
+            if symbol is Settings.EOF_MARKER:
                 break
 
             if symbol in self.symbol_catalogue:
@@ -77,7 +77,7 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
             yield symbol
 
     def get_symbol(self, bitstream: BufferedStringInput) -> Iterable[str]:
-        yield Config["FIXED_SYMBOL_LOOKUP"][bitstream.read(Config["FIXED_CODE_SIZE"])]
+        yield Settings.FIXED_SYMBOL_LOOKUP[bitstream.read(Settings.FIXED_CODE_SIZE)]
 
         current_node = self.root
         while True:
@@ -91,7 +91,7 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
                 raise ValueError(f"invalid bit found: {new_bit}")
 
             if current_node is self.NYT:
-                symbol = Config["FIXED_SYMBOL_LOOKUP"][bitstream.read(Config["FIXED_CODE_SIZE"])]
+                symbol = Settings.FIXED_SYMBOL_LOOKUP[bitstream.read(Settings.FIXED_CODE_SIZE)]
                 current_node = self.root
                 yield symbol
 

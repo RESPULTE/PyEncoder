@@ -22,13 +22,17 @@ class IBufferedBitOutput(IBufferedBitIO):
             self.source_obj.write(bytes_to_output)
 
     def flush(self) -> None:
+        self._resolve_incomplete_bytes()
         bytes_to_output = self._convert_to_bytes(self.buffered_bits)
         self.source_obj.write(bytes_to_output)
 
         self.buffered_bits = None
         self._flushed = True
 
-    def _convert_to_bytes(self, data: int | str) -> bytes:
+    def _convert_to_bytes(self) -> bytes:
+        ...
+
+    def _resolve_incomplete_bytes(self) -> None:
         ...
 
 

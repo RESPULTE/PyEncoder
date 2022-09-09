@@ -1,6 +1,6 @@
 from typing import Dict, Iterable, Literal, Tuple, Type, TypeVar, Union
 
-from pyencoder import Config
+from pyencoder import Settings
 
 
 class SingletonBitType(type):
@@ -37,7 +37,7 @@ class BitInteger(int, metaclass=SingletonBitType):
     def _convert(data: bytes | str | int, size: int = None) -> Tuple[int, int]:
         if isinstance(data, bytes):
             size = size or len(data) * 8
-            data = int.from_bytes(data, Config["ENDIAN"])
+            data = int.from_bytes(data, Settings.ENDIAN)
 
         elif isinstance(data, str):
             size = size or len(data)

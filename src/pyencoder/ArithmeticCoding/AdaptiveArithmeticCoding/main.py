@@ -1,10 +1,8 @@
 from typing import Generator, Iterable
 
+from pyencoder import Settings
 from pyencoder.utils.BitIO import BufferedBitInput
-from pyencoder import Config
-
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding.codebook import AdaptiveArithmeticCodebook
-from pyencoder.ArithmeticCoding import Settings
 
 
 class AdaptiveArithmeticEncoder:
@@ -29,17 +27,20 @@ class AdaptiveArithmeticEncoder:
             self.lower_limit = self.lower_limit + (sym_low * current_range // total_symbols)
 
             while True:
-                if self.upper_limit < Settings.HALF_RANGE:
+                if self.upper_limit < Settings.ArithmeticCoding.HALF_RANGE:
                     code += "0" + "1" * self.num_pending_bits
                     self.num_pending_bits = 0
 
-                elif self.lower_limit >= Settings.HALF_RANGE:
+                elif self.lower_limit >= Settings.ArithmeticCoding.HALF_RANGE:
                     code += "1" + "0" * self.num_pending_bits
                     self.num_pending_bits = 0
 
-                elif self.lower_limit >= Settings.QUARTER_RANGE and self.upper_limit < Settings.THREE_QUARTER_RANGE:
-                    self.lower_limit -= Settings.QUARTER_RANGE
-                    self.upper_limit -= Settings.QUARTER_RANGE
+                elif (
+                    self.lower_limit >= Settings.ArithmeticCoding.QUARTER_RANGE
+                    and self.upper_limit < Settings.ArithmeticCoding.THREE_QUARTER_RANGE
+                ):
+                    self.lower_limit -= Settings.ArithmeticCoding.QUARTER_RANGE
+                    self.upper_limit -= Settings.ArithmeticCoding.QUARTER_RANGE
                     self.num_pending_bits += 1
 
                 else:
@@ -48,14 +49,14 @@ class AdaptiveArithmeticEncoder:
                 self.lower_limit = self.lower_limit << 1
                 self.upper_limit = (self.upper_limit << 1) + 1
 
-                self.lower_limit &= Settings.FULL_RANGE_BITMASK
-                self.upper_limit &= Settings.FULL_RANGE_BITMASK
+                self.lower_limit &= Settings.ArithmeticCoding.FULL_RANGE_BITMASK
+                self.upper_limit &= Settings.ArithmeticCoding.FULL_RANGE_BITMASK
 
     def flush(self) -> str:
-        code = self.encoder.send(Config["EOF_MARKER"])
+        code = self.encoder.send(Settings.EOF_MARKER)
 
         self.num_pending_bits += 1
-        bit = 0 if self.lower_limit < Settings.QUARTER_RANGE else 1
+        bit = 0 if self.lower_limit < Settings.ArithmeticCoding.QUARTER_RANGE else 1
         retval = code + f"{bit}{str(bit ^ 1) * (self.num_pending_bits + 1)}"
 
         self.reset()
@@ -63,7 +64,7 @@ class AdaptiveArithmeticEncoder:
 
     def reset(self) -> None:
         self.lower_limit = 0
-        self.upper_limit = Settings.FULL_RANGE_BITMASK
+        self.upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
         self.num_pending_bits = 0
 
         self.codebook = AdaptiveArithmeticCodebook()
@@ -84,7 +85,7 @@ class AdaptiveArithmeticDecoder:
     def decode(self, bindata: str) -> Iterable[str]:
         bitstream = BufferedBitInput(bindata, as_int=True)
 
-        self.code_values = bitstream.read(Settings.PRECISION)
+        self.code_values = bitstream.read(Settings.ArithmeticCoding.PRECISION)
 
         while True:
             current_range = self.upper_limit - self.lower_limit + 1
@@ -94,7 +95,7 @@ class AdaptiveArithmeticDecoder:
 
             sym, (sym_low, sym_high) = self.codebook.probability_symbol_search(scaled_code_value)
 
-            if sym == Config["EOF_MARKER"]:
+            if sym == Settings.EOF_MARKER:
                 self.reset()
                 break
 
@@ -105,20 +106,23 @@ class AdaptiveArithmeticDecoder:
             while True:
 
                 # value's MSB is 0
-                if self.upper_limit < Settings.HALF_RANGE:
+                if self.upper_limit < Settings.ArithmeticCoding.HALF_RANGE:
                     pass
 
                 # value's MSB is 1
-                elif self.lower_limit >= Settings.HALF_RANGE:
-                    self.lower_limit -= Settings.HALF_RANGE
-                    self.upper_limit -= Settings.HALF_RANGE
-                    self.code_values -= Settings.HALF_RANGE
+                elif self.lower_limit >= Settings.ArithmeticCoding.HALF_RANGE:
+                    self.lower_limit -= Settings.ArithmeticCoding.HALF_RANGE
+                    self.upper_limit -= Settings.ArithmeticCoding.HALF_RANGE
+                    self.code_values -= Settings.ArithmeticCoding.HALF_RANGE
 
                 # lower & upper limit are converging
-                elif self.lower_limit >= Settings.QUARTER_RANGE and self.upper_limit < Settings.THREE_QUARTER_RANGE:
-                    self.lower_limit -= Settings.QUARTER_RANGE
-                    self.upper_limit -= Settings.QUARTER_RANGE
-                    self.code_values -= Settings.QUARTER_RANGE
+                elif (
+                    self.lower_limit >= Settings.ArithmeticCoding.QUARTER_RANGE
+                    and self.upper_limit < Settings.ArithmeticCoding.THREE_QUARTER_RANGE
+                ):
+                    self.lower_limit -= Settings.ArithmeticCoding.QUARTER_RANGE
+                    self.upper_limit -= Settings.ArithmeticCoding.QUARTER_RANGE
+                    self.code_values -= Settings.ArithmeticCoding.QUARTER_RANGE
 
                 else:
                     # self.lower_limit < 25% AND self.upper_limit > 75%
@@ -131,7 +135,7 @@ class AdaptiveArithmeticDecoder:
 
     def reset(self) -> None:
         self.lower_limit = 0
-        self.upper_limit = Settings.FULL_RANGE_BITMASK
+        self.upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
         self.code_values = 0
 
         self.codebook = AdaptiveArithmeticCodebook()

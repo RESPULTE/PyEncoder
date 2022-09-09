@@ -2,7 +2,7 @@ import bisect
 import collections
 from typing import Dict, Iterable, List, Tuple
 
-from pyencoder.ArithmeticCoding import Settings
+from pyencoder import Settings
 
 
 class ArithmeticCodebook(collections.OrderedDict):
@@ -24,7 +24,7 @@ class ArithmeticCodebook(collections.OrderedDict):
 
         for sym, count in counted_dataset.items():
             sym_lower_limit = cummulative_proabability
-            sym_upper_limit = cummulative_proabability + min(count, Settings.MAX_FREQUENCY)
+            sym_upper_limit = cummulative_proabability + min(count, Settings.ArithmeticCoding.MAX_FREQUENCY)
 
             codebook[sym] = (sym_lower_limit, sym_upper_limit)
             codebook.symbol_probability_bounds.append(sym_lower_limit)

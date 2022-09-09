@@ -1,8 +1,7 @@
 from typing import BinaryIO, TextIO
 
-from .main import encode, flush, decode
-
 from pyencoder.utils.BitIO import BufferedBitOutput
+from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.main import encode, flush, decode
 
 
 def dump(input_file: TextIO, output_file: BinaryIO) -> None:

@@ -41,6 +41,13 @@ class IBufferedIntegerIO(IBufferedBitIO):
     def _convert_to_bytes(self, data: BitInteger) -> bytes:
         return convert_ints_to_bytes(data, data.size)
 
+    def _resolve_incomplete_bytes(self) -> None:
+        size = 8 - self.buffered_size % 8
+        if size == 8:
+            return
+        self.buffered_bits <<= size
+        self.buffered_size += size
+
     def _read_from_buffer(self, n: int) -> BitInteger:
         retval, self.buffered_bits = self.buffered_bits.lslice(n)
         self.buffered_size -= n
@@ -65,6 +72,13 @@ class IBufferedStringIO(IBufferedBitIO):
 
     def _convert_to_bytes(self, data: str) -> bytes:
         return convert_bits_to_bytes(data, -(-len(data) // 8))
+
+    def _resolve_incomplete_bytes(self) -> None:
+        size = 8 - self.buffered_size % 8
+        if size == 8:
+            return
+        self.buffered_bits += "0" * size
+        self.buffered_size += size
 
     def _read_from_buffer(self, n: int) -> str:
         self.buffered_size -= n

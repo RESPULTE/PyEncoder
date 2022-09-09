@@ -64,3 +64,6 @@ def general_encode(dataset: ValidDataset) -> List[Tuple[int, T]]:
         encoded_data.append((count, curr_elem))
 
     return encoded_data
+
+
+
