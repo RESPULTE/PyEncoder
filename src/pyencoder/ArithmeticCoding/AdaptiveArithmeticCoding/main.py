@@ -5,8 +5,9 @@ from pyencoder.utils.BitIO import BufferedBitInput
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding.codebook import AdaptiveArithmeticCodebook
 
 
-class AdaptiveArithmeticEncoder:
+class AdaptiveEncoder:
     def __init__(self):
+        self.codebook = AdaptiveArithmeticCodebook()
         self.reset()
 
     def encode(self, symbol: str) -> str:
@@ -60,6 +61,8 @@ class AdaptiveArithmeticEncoder:
         retval = code + f"{bit}{str(bit ^ 1) * (self.num_pending_bits + 1)}"
 
         self.reset()
+        self.encoder.close()
+
         return retval
 
     def reset(self) -> None:
@@ -67,19 +70,15 @@ class AdaptiveArithmeticEncoder:
         self.upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
         self.num_pending_bits = 0
 
-        self.codebook = AdaptiveArithmeticCodebook()
+        self.codebook.reset()
 
         self.encoder = self._encode()
         self.encoder.send(None)
 
 
-encoder = AdaptiveArithmeticEncoder()
-encode = encoder.encode
-flush = encoder.flush
-
-
-class AdaptiveArithmeticDecoder:
+class AdaptiveDecoder:
     def __init__(self) -> None:
+        self.codebook = AdaptiveArithmeticCodebook()
         self.reset()
 
     def decode(self, bindata: str) -> Iterable[str]:
@@ -138,7 +137,4 @@ class AdaptiveArithmeticDecoder:
         self.upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
         self.code_values = 0
 
-        self.codebook = AdaptiveArithmeticCodebook()
-
-
-decode = AdaptiveArithmeticDecoder().decode
+        self.codebook.reset()

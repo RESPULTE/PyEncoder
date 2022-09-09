@@ -7,7 +7,7 @@ from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanTree, get_huffman_code
 
 
-class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
+class AdaptiveEncoder(AdaptiveHuffmanTree):
     def __init__(self) -> None:
         super().__init__()
         self.reset()
@@ -47,12 +47,7 @@ class AdaptiveHuffmanEncoder(AdaptiveHuffmanTree):
         self._iterable.send(None)
 
 
-encoder = AdaptiveHuffmanEncoder()
-encode = encoder.encode
-flush = encoder.flush()
-
-
-class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
+class AdaptiveDecoder(AdaptiveHuffmanTree):
     def __init__(self) -> None:
         super().__init__()
 
@@ -99,6 +94,3 @@ class AdaptiveHuffmanDecoder(AdaptiveHuffmanTree):
                 symbol = current_node.symbol
                 current_node = self.root
                 yield symbol
-
-
-decode = AdaptiveHuffmanDecoder().decode

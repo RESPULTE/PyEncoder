@@ -6,7 +6,7 @@ from pyencoder.HuffmanCoding.StaticHuffmanCoding.codebook import generate_canoni
 
 
 def decode(codebook: Dict[str, str], encoded_data: str) -> str:
-
+    codebook = {v: k for k, v in codebook.items()}
     decoded_data = ""
     curr_code = ""
 
@@ -27,7 +27,7 @@ def decode(codebook: Dict[str, str], encoded_data: str) -> str:
     return decoded_data
 
 
-def encode(dataset: str) -> Tuple[Dict[str, str], str]:
-    codebook = generate_canonical_codebook(dataset)
-    encoded_data = "".join([codebook[data] for data in dataset])
+def encode(data: str) -> Tuple[Dict[str, str], str]:
+    codebook = generate_canonical_codebook(data)
+    encoded_data = "".join([codebook[data] for data in data])
     return codebook, encoded_data

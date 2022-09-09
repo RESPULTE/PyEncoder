@@ -6,10 +6,10 @@ from pyencoder.utils.BitIO import BufferedBitInput
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import ArithmeticCodebook
 
 
-def encode(dataset: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
-    dataset += Settings.EOF_MARKER
+def encode(data: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
+    data += Settings.EOF_MARKER
 
-    codebook = ArithmeticCodebook.from_dataset(dataset)
+    codebook = ArithmeticCodebook.from_dataset(data)
 
     lower_limit = 0
     upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
@@ -18,7 +18,7 @@ def encode(dataset: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
     num_pending_bits = 0
     total_elems = codebook.total_elems
 
-    for sym in dataset:
+    for sym in data:
         sym_low, sym_high = codebook[sym]
 
         current_range = upper_limit - lower_limit + 1
@@ -57,14 +57,14 @@ def encode(dataset: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
     return codebook, encoded_data
 
 
-def decode(bindata: str, codebook: ArithmeticCodebook) -> str:
+def decode(codebook: ArithmeticCodebook, encoded_data: str) -> str:
     lower_limit = 0
     upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
 
-    bitstream = BufferedBitInput(bindata, as_int=True, default_value=0)
+    bitstream = BufferedBitInput(encoded_data, as_int=True, default_value=0)
     code_values = bitstream.read(Settings.ArithmeticCoding.PRECISION)
 
-    decoded_data = []
+    decoded_data = ""
     total_elems = codebook.total_elems
 
     while True:
@@ -76,7 +76,7 @@ def decode(bindata: str, codebook: ArithmeticCodebook) -> str:
         if sym == Settings.EOF_MARKER:
             break
 
-        decoded_data.append(sym)
+        decoded_data += sym
         upper_limit = lower_limit + (sym_high * current_range // total_elems) - 1
         lower_limit = lower_limit + (sym_low * current_range // total_elems)
 

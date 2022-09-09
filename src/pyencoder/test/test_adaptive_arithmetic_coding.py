@@ -23,17 +23,5 @@ def test_adaptive_codebook_symbol_search(adaptive_codebook: AAC_codebook.Adaptiv
         assert sym_low <= i <= sym_high
 
 
-def test_dump_and_load(StringData: str) -> None:
-    with tempfile.TemporaryFile(mode="r+") as txt_file:
-        txt_file.write(StringData)
-        txt_file.flush()
-        txt_file.seek(0)
-
-        with tempfile.TemporaryFile(mode="r+b") as encoded_file:
-            AAC_io.dump(txt_file, encoded_file)
-            encoded_file.seek(0)
-
-            with tempfile.TemporaryFile(mode="r+") as decoded_file:
-                AAC_io.load(encoded_file, decoded_file)
-
-                assert decoded_file.read() == txt_file.read()
+def test_adaptive_codebook_catalogue():
+    ...

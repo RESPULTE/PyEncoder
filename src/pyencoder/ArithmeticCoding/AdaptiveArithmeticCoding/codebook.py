@@ -7,6 +7,9 @@ from pyencoder import Settings
 
 class AdaptiveArithmeticCodebook:
     def __init__(self):
+        self.reset()
+
+    def reset(self) -> None:
         self.symbol_catalogue = OrderedDict({k: 1 for k in Settings.SYMBOLS})
         self.symbol_counts = self.symbol_catalogue.values()
         self.symbol_probability_bounds = list(itertools.accumulate(self.symbol_counts, initial=0))

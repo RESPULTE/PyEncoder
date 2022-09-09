@@ -14,7 +14,7 @@ def load(input_file: BinaryIO, output_file: TextIO | None) -> None | str:
 
     codebook = generate_codebook_from_header(data)
 
-    decoded_data = decode(input_file, codebook)
+    decoded_data = decode(codebook, input_file)
     if not output_file:
         return decoded_data
 
