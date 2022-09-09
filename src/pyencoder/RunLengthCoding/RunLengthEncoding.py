@@ -1,25 +1,25 @@
-from typing import Optional, List, Tuple, overload
+from typing import Iterable, Optional, List, Tuple, overload
 
-from pyencoder.type_hints import ValidDataset, T
+from pyencoder.type_hints import _T
 
 
 @overload
-def encode(dataset: ValidDataset) -> List[Tuple[int, T]]:
+def encode(dataset: Iterable[_T]) -> List[Tuple[int, _T]]:
     ...
 
 
 @overload
-def encode(dataset: ValidDataset, target_value: T, end_marker: T = (0, 0)) -> List[Tuple[int, T]]:
+def encode(dataset: Iterable[_T], target_value: _T) -> List[Tuple[int, _T]]:
     ...
 
 
-def encode(dataset: ValidDataset, target_value: Optional[T] = None, end_marker: Optional[T] = (0, 0)):
+def encode(dataset: Iterable[_T], target_value: Optional[_T] = None):
     if target_value is not None:
-        return targeted_encode(dataset, target_value, end_marker)
+        return targeted_encode(dataset, target_value)
     return general_encode(dataset)
 
 
-def targeted_encode(dataset: ValidDataset, target_value: T, end_marker: T) -> List[Tuple[int, T]]:
+def targeted_encode(dataset: Iterable[_T], target_value: _T) -> List[Tuple[int, str]]:
     dataset_size = len(dataset)
     encoded_data = []
     curr_index = 0
@@ -37,17 +37,13 @@ def targeted_encode(dataset: ValidDataset, target_value: T, end_marker: T) -> Li
             curr_index += 1
             count += 1
 
-        if curr_index == dataset_size:
-            encoded_data.append(end_marker)
-            break
-
         encoded_data.append((count, dataset[curr_index]))
         curr_index += 1
 
     return encoded_data
 
 
-def general_encode(dataset: ValidDataset) -> List[Tuple[int, T]]:
+def general_encode(dataset: str) -> List[Tuple[int, _T]]:
     dataset_size = len(dataset)
     encoded_data = []
     curr_index = 0
@@ -64,6 +60,3 @@ def general_encode(dataset: ValidDataset) -> List[Tuple[int, T]]:
         encoded_data.append((count, curr_elem))
 
     return encoded_data
-
-
-

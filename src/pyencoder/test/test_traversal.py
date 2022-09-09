@@ -1,5 +1,5 @@
 import pytest
-from pyencoder.utils import arrangement as arr
+from pyencoder.RunLengthCoding import arrangement as arr
 
 
 @pytest.fixture

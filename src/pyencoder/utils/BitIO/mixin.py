@@ -2,7 +2,7 @@ from typing import BinaryIO
 
 from pyencoder.utils.BitIO.abc import IBufferedBitIO
 from pyencoder.utils.BitIO import BUFFER_BITSIZE
-from pyencoder.utils.bitstring import BitInteger
+from pyencoder.utils.bitInteger import BitInteger
 
 from pyencoder.utils.binary import *
 

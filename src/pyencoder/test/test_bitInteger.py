@@ -1,6 +1,6 @@
 import pytest
 
-from pyencoder.utils.bitstring import BitInteger
+from pyencoder.utils.bitInteger import BitInteger
 
 
 def test_creation():

@@ -1,7 +1,7 @@
 from typing import TypeVar
 
 
-__T = TypeVar("__T")
+_T = TypeVar("__T")
 
 
 class DecodingError(Exception):
