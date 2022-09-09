@@ -2,7 +2,8 @@ import abc
 from typing import BinaryIO, Union
 
 
-from pyencoder.utils.BitIO.abc import IBufferedBitIO, IBufferedIntegerIO, IBufferedStringIO
+from pyencoder.utils.BitIO.mixin import MixinBufferedIntegerIO, MixinBufferedStringIO
+from pyencoder.utils.BitIO.abc import IBufferedBitIO
 from pyencoder.utils.BitIO import BUFFER_BITSIZE
 
 
@@ -47,11 +48,11 @@ def BufferedBitOutput(
     return cls(file_obj, buffer_size)
 
 
-class BufferedStringOutput(IBufferedStringIO, IBufferedBitOutput):
+class BufferedStringOutput(MixinBufferedStringIO, IBufferedBitOutput):
     def __init__(self, file_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE) -> None:
         super().__init__(file_obj, buffer_size)
 
 
-class BufferedIntegerOutput(IBufferedIntegerIO, IBufferedBitOutput):
+class BufferedIntegerOutput(MixinBufferedIntegerIO, IBufferedBitOutput):
     def __init__(self, file_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE) -> None:
         super().__init__(file_obj, buffer_size)

@@ -1,7 +1,8 @@
 import functools
 from typing import BinaryIO, Union, Literal, Iterable
 
-from pyencoder.utils.BitIO.abc import IBufferedBitIO, IBufferedIntegerIO, IBufferedStringIO
+from pyencoder.utils.BitIO.abc import IBufferedBitIO
+from pyencoder.utils.BitIO.mixin import MixinBufferedIntegerIO, MixinBufferedStringIO
 from pyencoder.utils.binary import slice_read
 from pyencoder.utils.BitIO import BUFFER_BITSIZE
 
@@ -77,7 +78,7 @@ def BufferedBitInput(
     return cls(source_obj, buffer_size, default_value)
 
 
-class BufferedStringInput(IBufferedStringIO, IBufferedBitInput):
+class BufferedStringInput(MixinBufferedStringIO, IBufferedBitInput):
     def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE, default_value: str = None) -> None:
         super().__init__(source_obj, buffer_size)
         self.default_value = default_value
@@ -90,7 +91,7 @@ class BufferedStringInput(IBufferedStringIO, IBufferedBitInput):
                 yield bits[i]
 
 
-class BufferedIntegerInput(IBufferedIntegerIO, IBufferedBitInput):
+class BufferedIntegerInput(MixinBufferedIntegerIO, IBufferedBitInput):
     def __init__(self, source_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE, default_value: int = None) -> None:
         super().__init__(source_obj, buffer_size)
         self.default_value = default_value
