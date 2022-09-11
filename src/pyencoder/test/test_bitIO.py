@@ -1,4 +1,4 @@
-from pyencoder.utils.BitIO import BufferedBitInput, BufferedBitOutput
+from pyencoder.utils.BitIO import BufferedStringInput, BufferedIntegerInput, BufferedIntegerOutput, BufferedStringOutput
 import tempfile
 import pytest
 
@@ -8,7 +8,7 @@ def test_str_read_iter(StringData: str) -> None:
         tmp.write(StringData.encode("utf-8"))
         tmp.seek(0)
 
-        reader = BufferedBitInput(tmp)
+        reader = BufferedStringInput(tmp)
 
         buffer = 0
         buffer_size = 0
@@ -30,7 +30,7 @@ def test_int_read_iter(StringData: str) -> None:
         tmp.write(StringData.encode("utf-8"))
         tmp.seek(0)
 
-        reader = BufferedBitInput(tmp, as_int=True)
+        reader = BufferedIntegerInput(tmp)
 
         buffer = 0
         buffer_size = 0
@@ -53,7 +53,7 @@ def test_str_read(StringData: str, n: int) -> None:
         tmp.write(StringData.encode("ascii"))
         tmp.seek(0)
 
-        reader = BufferedBitInput(tmp)
+        reader = BufferedStringInput(tmp)
 
         buffer_size = 0
         buffer = ""
@@ -74,13 +74,13 @@ def test_str_read(StringData: str, n: int) -> None:
     assert "".join(output) == StringData
 
 
-@pytest.mark.parametrize("n", [1, 3, 7, 10, 20, 64, 100])
+@pytest.mark.parametrize("n", [1, 8])
 def test_int_read(StringData: str, n: int) -> None:
     with tempfile.TemporaryFile() as tmp:
         tmp.write(StringData.encode("ascii"))
         tmp.seek(0)
 
-        reader = BufferedBitInput(tmp, as_int=True)
+        reader = BufferedIntegerInput(tmp)
 
         buffer_size = 0
         buffer = 0
@@ -90,9 +90,8 @@ def test_int_read(StringData: str, n: int) -> None:
             if new_bits == None:
                 break
 
-            size = len(new_bits)
-            buffer = (buffer << size) | new_bits
-            buffer_size += size
+            buffer = (buffer << n) | new_bits
+            buffer_size += n
 
             while buffer_size >= 8:
                 i = buffer_size - 8
@@ -107,7 +106,7 @@ def test_int_read(StringData: str, n: int) -> None:
 
 def test_bit_write(StringData) -> None:
     with tempfile.TemporaryFile() as tmp:
-        writer = BufferedBitOutput(tmp)
+        writer = BufferedStringOutput(tmp)
         for s in StringData:
             writer.write(bin(ord(s))[2:].zfill(8))
         writer.flush()
@@ -123,7 +122,7 @@ def test_bit_bulk_write(StringData) -> None:
         for s in StringData:
             bindata += bin(ord(s))[2:].zfill(8)
 
-        writer = BufferedBitOutput(tmp)
+        writer = BufferedStringOutput(tmp)
         writer.write(bindata)
         writer.flush()
 

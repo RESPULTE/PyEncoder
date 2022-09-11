@@ -83,9 +83,6 @@ def relocate_node(node_1: AdaptiveHuffmanNode, node_2: AdaptiveHuffmanNode) -> N
 
 class AdaptiveHuffmanTree:
     def __init__(self) -> None:
-        self.reset()
-
-    def reset(self) -> None:
         self.symbol_catalogue: Dict[str, AdaptiveHuffmanNode] = {}
         self.weight_catalogue: collections.OrderedDict[int, List[AdaptiveHuffmanNode]] = collections.OrderedDict(
             {1: []}
@@ -93,6 +90,9 @@ class AdaptiveHuffmanTree:
         self.order_index = 2 * Settings.NUM_SYMBOLS - 1
 
         self.root = self.NYT = AdaptiveHuffmanNode(None, 0, self.order_index)
+
+    def reset(self) -> None:
+        self.__init__()
 
     def increment_node_weight(self, node: AdaptiveHuffmanNode) -> None:
         # every time a node is promoted, the node is sorted into the list
@@ -123,7 +123,7 @@ class AdaptiveHuffmanTree:
 
         return node.parent
 
-    def update(self, node: AdaptiveHuffmanNode) -> None:
+    def _update_node_relation(self, node: AdaptiveHuffmanNode) -> None:
         while not node.is_root:
 
             arr = self.weight_catalogue[node.weight]

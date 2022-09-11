@@ -58,6 +58,7 @@ class _Settings(metaclass=Singleton):
 
     def __setattr__(self, __name: str, __value: Any) -> None:
         super().__setattr__(__name, __value)
+
         if __name == self.SYMBOLS:
             self.recalibrate()
 

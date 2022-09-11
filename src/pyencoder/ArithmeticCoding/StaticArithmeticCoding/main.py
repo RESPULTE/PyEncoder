@@ -1,7 +1,7 @@
 from typing import Dict, Tuple
 
 from pyencoder import Settings
-from pyencoder.utils.BitIO import BufferedBitInput
+from pyencoder.utils.bitbuffer import BitIntegerBuffer
 
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import ArithmeticCodebook
 
@@ -61,7 +61,7 @@ def decode(codebook: ArithmeticCodebook, encoded_data: str) -> str:
     lower_limit = 0
     upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
 
-    bitstream = BufferedBitInput(encoded_data, as_int=True, default_value=0)
+    bitstream = BitIntegerBuffer(encoded_data)
     code_values = bitstream.read(Settings.ArithmeticCoding.PRECISION)
 
     decoded_data = ""

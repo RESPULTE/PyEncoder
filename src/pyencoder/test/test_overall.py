@@ -46,7 +46,8 @@ def test_adaptive_encode_decode(StringData: str, algorithm: object) -> None:
     encoded_data += encoder.flush()
 
     decoded_data = ""
-    for sym in decoder.decode(encoded_data):
-        decoded_data += sym
+    for i in range(0, len(encoded_data), 8):
+        decoded_data += decoder.decode(encoded_data[i : i + 8])
+    decoded_data += decoder.flush()
 
     assert decoded_data == StringData

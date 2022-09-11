@@ -1,5 +1,4 @@
 import itertools
-import tempfile
 import pytest
 import tempfile
 import collections

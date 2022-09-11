@@ -2,19 +2,19 @@ from collections import OrderedDict
 from typing import BinaryIO, TextIO
 
 from pyencoder import Settings
-from pyencoder.utils.BitIO.output import BufferedBitOutput
-from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
+from pyencoder.utils.BitIO.input import BufferedStringInput
+from pyencoder.utils.BitIO.output import BufferedStringOutput
 
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.main import decode, encode
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import ArithmeticCodebook
 
 
 def load(input_file: BinaryIO, output_file: TextIO | None) -> None | str:
-    data = BufferedBitInput(input_file)
+    data = BufferedStringInput(input_file)
 
     codebook = generate_codebook_from_header(data)
 
-    decoded_data = decode(codebook, input_file)
+    decoded_data = decode(codebook, input_file.read())
     if not output_file:
         return decoded_data
 
@@ -22,14 +22,14 @@ def load(input_file: BinaryIO, output_file: TextIO | None) -> None | str:
 
 
 def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
-    data = input_file.read()
+    data = input_file.read() if hasattr(input_file, "read") else input_file
     codebook, encoded_data = encode(data)
     header = generate_header_from_codebook(codebook)
 
     if not output_file:
         return header + encoded_data
 
-    bitstream = BufferedBitOutput(output_file)
+    bitstream = BufferedStringOutput(output_file)
     bitstream.write(header + encoded_data)
     bitstream.flush()
 

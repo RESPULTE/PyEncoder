@@ -1,6 +1,5 @@
 import uuid
 import pytest
-import tempfile
 import collections
 
 from pyencoder.HuffmanCoding import AdaptiveHuffmanCoding

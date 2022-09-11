@@ -1,8 +1,7 @@
-import io
-from typing import Iterable, Generator
+from typing import Generator
 
 from pyencoder import Settings
-from pyencoder.utils.BitIO.input import BufferedBitInput, BufferedStringInput
+from pyencoder.utils.bitbuffer import BitStringBuffer
 
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanTree, get_huffman_code
 
@@ -10,87 +9,119 @@ from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffm
 class AdaptiveEncoder(AdaptiveHuffmanTree):
     def __init__(self) -> None:
         super().__init__()
-        self.reset()
+
+        self._encoder = self._encode()
+        self._encoder.send(None)
 
     def encode(self, symbol: str) -> str:
-        return self._iterable.send(symbol)
+        return self._encoder.send(symbol)
 
     def flush(self) -> str:
-        retval = self._iterable.send(Settings.EOF_MARKER)
+        retval = self._encoder.send(Settings.EOF_MARKER)
+        self._encoder.close()
         return retval
 
     def _encode(self) -> Generator[str, str, None]:
         huffman_code = ""
-        try:
-            while True:
-                symbol = yield huffman_code
-                if symbol in self.symbol_catalogue:
-                    node = self.symbol_catalogue[symbol]
-                    huffman_code = get_huffman_code(node)
+        while True:
+            symbol = yield huffman_code
+            if symbol in self.symbol_catalogue:
+                node = self.symbol_catalogue[symbol]
+                huffman_code = get_huffman_code(node)
 
-                else:
-                    huffman_code = get_huffman_code(self.NYT) + Settings.FIXED_CODE_LOOKUP[symbol]
+            else:
+                huffman_code = get_huffman_code(self.NYT) + Settings.FIXED_CODE_LOOKUP[symbol]
 
-                    node = self.create_node(symbol)
-                    if node.parent and not node.parent.is_root:
-                        node = self.pre_process(node)
+                node = self.create_node(symbol)
+                if node.parent and not node.parent.is_root:
+                    node = self.pre_process(node)
 
-                self.update(node)
-
-        except Exception as err:
-            raise Exception("error occured while encoding") from err
+            self._update_node_relation(node)
 
     def reset(self) -> None:
-        super().reset()
-
-        self._iterable = self._encode()
-        self._iterable.send(None)
+        self.__init__()
 
 
 class AdaptiveDecoder(AdaptiveHuffmanTree):
     def __init__(self) -> None:
         super().__init__()
 
-    def decode(self, bitstream: str | bytes | io.BufferedReader) -> Iterable[str]:
-        symbol_getter = self.get_symbol(BufferedBitInput(bitstream))
-        while True:
+        self.bitstream = BitStringBuffer()
+        self._decoder = self._decode()
+        self._decoder.send(None)
 
-            symbol = next(symbol_getter)
-            if symbol is Settings.EOF_MARKER:
-                break
+        self._primed = False
 
-            if symbol in self.symbol_catalogue:
-                node = self.symbol_catalogue[symbol]
+    def decode(self, bits: bytes | str | int) -> str:
+        if not self._primed:
+            self.bitstream.write(bits)
+            if len(self.bitstream) < Settings.FIXED_CODE_SIZE:
+                return ""
 
-            else:
-                node = self.create_node(symbol)
-                if node.parent and not node.parent.is_root:
-                    node = self.pre_process(node)
+            symbol = Settings.FIXED_SYMBOL_LOOKUP[self.bitstream.read(Settings.FIXED_CODE_SIZE)]
+            self._update(symbol)
+            self._primed = True
+            return symbol
 
-            self.update(node)
+        return self._decoder.send(bits)
 
-            yield symbol
-
-    def get_symbol(self, bitstream: BufferedStringInput) -> Iterable[str]:
-        yield Settings.FIXED_SYMBOL_LOOKUP[bitstream.read(Settings.FIXED_CODE_SIZE)]
-
+    def _decode(self) -> Generator[str, str, None]:
         current_node = self.root
+        decoded_symbols = ""
         while True:
 
-            new_bit = bitstream.read(1)
-            if new_bit == "0":
-                current_node = current_node.left
-            elif new_bit == "1":
-                current_node = current_node.right
-            else:
-                raise ValueError(f"invalid bit found: {new_bit}")
+            bits = yield decoded_symbols
+            self.bitstream.write(bits)
+            decoded_symbols = ""
 
-            if current_node is self.NYT:
-                symbol = Settings.FIXED_SYMBOL_LOOKUP[bitstream.read(Settings.FIXED_CODE_SIZE)]
-                current_node = self.root
-                yield symbol
+            while self.bitstream:
 
-            elif current_node.is_leaf:
-                symbol = current_node.symbol
-                current_node = self.root
-                yield symbol
+                new_bit = self.bitstream.read(1)
+                if new_bit == "0":
+                    current_node = current_node.left
+                elif new_bit == "1":
+                    current_node = current_node.right
+                else:
+                    raise ValueError(f"invalid bit found: {new_bit}")
+
+                if current_node is self.NYT:
+                    while len(self.bitstream) < Settings.FIXED_CODE_SIZE:
+                        bits = yield ""
+                        self.bitstream.write(bits)
+
+                    new_symbol = Settings.FIXED_SYMBOL_LOOKUP[self.bitstream.read(Settings.FIXED_CODE_SIZE)]
+                    if new_symbol == Settings.EOF_MARKER:
+                        yield decoded_symbols
+                        return
+
+                    decoded_symbols += new_symbol
+                    current_node = self.root
+                    self._update(new_symbol)
+
+                elif current_node.is_leaf:
+                    new_symbol = current_node.symbol
+                    decoded_symbols += new_symbol
+                    current_node = self.root
+                    self._update(new_symbol)
+
+    def _update(self, symbol: str) -> Generator[str, str | int | bytes, None]:
+        if symbol is Settings.EOF_MARKER:
+            return
+
+        if symbol in self.symbol_catalogue:
+            node = self.symbol_catalogue[symbol]
+
+        else:
+            node = self.create_node(symbol)
+            if node.parent and not node.parent.is_root:
+                node = self.pre_process(node)
+
+        self._update_node_relation(node)
+
+    def flush(self) -> str:
+        self._decoder.close()
+        self.reset()
+        return ""
+
+    def reset(self) -> None:
+        self.__init__()

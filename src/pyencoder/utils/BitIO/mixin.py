@@ -1,68 +1,89 @@
+import functools
 from typing import BinaryIO
 
-from pyencoder.utils.BitIO.abc import IBufferedBitIO
+from pyencoder import Settings
+
+from pyencoder.utils.BitIO.abc import IBufferedBitTypeIO, IBufferedBitOutput, IBufferedBitInput
 from pyencoder.utils.BitIO import BUFFER_BITSIZE
-from pyencoder.utils.bitInteger import BitInteger
-
-from pyencoder.utils.binary import *
+from pyencoder.utils.bitbuffer import BitIntegerBuffer, BitStringBuffer
 
 
-class MixinBufferedIntegerIO(IBufferedBitIO):
-    def __init__(self, source_obj: BinaryIO | bytes | str, buffer_size: int = BUFFER_BITSIZE) -> None:
-        super().__init__(source_obj, buffer_size)
-        self.buffered_bits = BitInteger("0")
+class MixinBufferedIntegerIO(IBufferedBitTypeIO):
+    def __init__(self, file_obj: BinaryIO | bytes | str, buffer_size: int = BUFFER_BITSIZE) -> None:
+        super().__init__(file_obj, buffer_size)
+        self.buffer = BitIntegerBuffer()
 
-    def _convert_to_retval(self, data: bytes | str) -> BitInteger:
-        return BitInteger(data)
-
-    def _convert_to_bytes(self, data: BitInteger) -> bytes:
-        return convert_ints_to_bytes(data, data.size)
-
-    def _resolve_incomplete_bytes(self) -> None:
-        size = 8 - self.buffered_size % 8
-        if size == 8:
-            return
-        self.buffered_bits <<= size
-        self.buffered_size += size
-
-    def _read_from_buffer(self, n: int) -> BitInteger:
-        retval, self.buffered_bits = self.buffered_bits.lslice(n)
-        self.buffered_size -= n
-        return retval
-
-    def _write_to_buffer(self, bits: int) -> None:
-        bits_size = len(bits)
-        self.buffered_bits = (self.buffered_bits << bits_size) | bits
-        self.buffered_size += bits_size
+    def _convert_to_bytes(self, data: int) -> bytes:
+        return int.to_bytes(data, -(-data.bit_length() // 8), Settings.ENDIAN)
 
 
-class MixinBufferedStringIO(IBufferedBitIO):
-    def __init__(self, source_obj: BinaryIO | str | bytes, buffer_size: int = BUFFER_BITSIZE) -> None:
-        super().__init__(source_obj, buffer_size)
-        self.buffered_bits = ""
-
-        if isinstance(source_obj, str):
-            self._convert_to_retval = lambda x: x
-
-    def _convert_to_retval(self, data: str | bytes) -> str:
-        return convert_bytes_to_bits(data, len(data) * 8)
+class MixinBufferedStringIO(IBufferedBitTypeIO):
+    def __init__(self, file_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE) -> None:
+        super().__init__(file_obj, buffer_size)
+        self.buffer = BitStringBuffer()
 
     def _convert_to_bytes(self, data: str) -> bytes:
-        return convert_bits_to_bytes(data, -(-len(data) // 8))
+        _int = int(data, 2)
+        return int.to_bytes(_int, -(-len(data) // 8), Settings.ENDIAN)
+
+
+class MixinBufferedBitInput(IBufferedBitInput):
+    def __init__(self, file_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE) -> None:
+        super().__init__(file_obj, buffer_size)
+
+        if not hasattr(self.file_obj, "read"):
+            raise TypeError(f"invalid type {type(file_obj)}")
+
+        self.source_reader = functools.partial(self.file_obj.read, buffer_size // 8)
+
+    def read(self, n: int) -> int | str:
+        # if reading process is finished
+        if self._flushed:
+            return None
+
+        # if the bits left in the buffer is more than the requested amount
+        if n <= len(self.buffer):
+            return self.buffer.read(n)
+
+        while len(self.buffer) < n:
+            source_data = self.source_reader()
+
+            if not source_data:
+                return self.flush()
+
+            self.buffer.write(source_data)
+
+        return self.buffer.read(n)
+
+    def flush(self) -> str:
+        return self.buffer.read()
+
+
+class MixinBufferedBitOutput(IBufferedBitOutput):
+    def __init__(self, file_obj: BinaryIO, buffer_size: int = BUFFER_BITSIZE) -> None:
+        super().__init__(file_obj, buffer_size)
+
+    def write(self, bits: int | str) -> None:
+        self.buffer.write(bits)
+
+        if len(self.buffer) < self.buffer_size:
+            return
+
+        while len(self.buffer) > self.buffer_size:
+            retval = self.buffer.read(self.buffer_size)
+            bytes_to_output = self._convert_to_bytes(retval)
+            self.file_obj.write(bytes_to_output)
+
+    def flush(self) -> None:
+        self._resolve_incomplete_bytes()
+        bytes_to_output = self._convert_to_bytes(self.buffer.read())
+        self.file_obj.write(bytes_to_output)
+
+        self.buffer = None
+        self._flushed = True
 
     def _resolve_incomplete_bytes(self) -> None:
-        size = 8 - self.buffered_size % 8
+        size = 8 - len(self.buffer) % 8
         if size == 8:
             return
-        self.buffered_bits += "0" * size
-        self.buffered_size += size
-
-    def _read_from_buffer(self, n: int) -> str:
-        self.buffered_size -= n
-        retval = self.buffered_bits[:n]
-        self.buffered_bits = self.buffered_bits[n:]
-        return retval
-
-    def _write_to_buffer(self, bits: str) -> None:
-        self.buffered_bits += bits
-        self.buffered_size += len(bits)
+        self.buffer.write("0" * size)

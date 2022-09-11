@@ -1,7 +1,7 @@
 from typing import Tuple, Dict
 
 from pyencoder import Settings
-from pyencoder.utils.BitIO import BufferedBitInput
+from pyencoder.utils.bitbuffer import BitStringBuffer
 from pyencoder.HuffmanCoding.StaticHuffmanCoding.codebook import generate_canonical_codebook
 
 
@@ -10,7 +10,7 @@ def decode(codebook: Dict[str, str], encoded_data: str) -> str:
     decoded_data = ""
     curr_code = ""
 
-    to_process = BufferedBitInput(encoded_data)
+    to_process = BitStringBuffer(encoded_data)
     while to_process:
         curr_code += to_process.read(1)
 

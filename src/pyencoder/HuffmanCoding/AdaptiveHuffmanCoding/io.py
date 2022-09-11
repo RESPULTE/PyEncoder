@@ -1,30 +1,38 @@
 from typing import BinaryIO, TextIO
 
-from pyencoder.utils.BitIO import BufferedBitOutput
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.main import AdaptiveDecoder, AdaptiveEncoder
+from pyencoder.utils.BitIO.output import BufferedStringOutput
+from pyencoder.utils.BitIO.input import BufferedStringInput
 
 
-def dump(input_file: TextIO, output_file: BinaryIO) -> None:
+def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
+    bit_output = BufferedStringOutput(output_file)
     encoder = AdaptiveEncoder()
-    bitstream = BufferedBitOutput(output_file)
 
-    while True:
+    for symbol in input_file.read():
+        bit_output.write(encoder.encode(symbol))
 
-        symbol = input_file.read(1)
-
-        if not symbol:
-            bitstream.write(encoder.flush())
-            bitstream.flush()
-            break
-
-        bitstream.write(encoder.encode(symbol))
+    bit_output.write(encoder.flush())
+    bit_output.flush()
 
 
 def load(input_file: BinaryIO, output_file: TextIO = None) -> str | None:
     decoder = AdaptiveDecoder()
-    if output_file:
-        for symbol in decoder.decode(input_file):
-            output_file.write(symbol)
-        return None
+    bit_input = BufferedStringInput(input_file)
 
-    return "".join(decoder.decode(input_file))
+    if output_file:
+        while True:
+            encoded_bits = bit_input.read(32)
+            if not encoded_bits:
+                output_file.write(decoder.flush())
+                return
+            output_file.write(decoder.decode(encoded_bits))
+
+    decoded_data = ""
+
+    while True:
+        encoded_bits = bit_input.read(32)
+        if not encoded_bits:
+            decoded_data += decoder.flush()
+            return decoded_data
+        decoded_data += decoder.decode(encoded_bits)

@@ -4,8 +4,9 @@ from typing import BinaryIO, TextIO, Dict, List
 from pyencoder import Settings
 
 from pyencoder.type_hints import CorruptedHeaderError, CorruptedEncodingError
-from pyencoder.utils.BitIO import BufferedBitOutput, BufferedBitInput
 from pyencoder.utils.BitIO.input import BufferedStringInput
+from pyencoder.utils.BitIO.output import BufferedStringOutput
+
 
 from pyencoder.HuffmanCoding.StaticHuffmanCoding.codebook import generate_canonical_codebook
 from pyencoder.HuffmanCoding.StaticHuffmanCoding.main import decode
@@ -80,7 +81,7 @@ def generate_header_from_codebook(codebook: Dict[str, str]) -> str:
 
 
 def dump(input_source: str | TextIO, output_source: BinaryIO) -> None:
-    bitstream = BufferedBitOutput(output_source)
+    bitstream = BufferedStringOutput(output_source)
 
     sof_marker = Settings.FIXED_CODE_LOOKUP[Settings.SOF_MARKER]
     bitstream.write(sof_marker)
@@ -102,7 +103,7 @@ def dump(input_source: str | TextIO, output_source: BinaryIO) -> None:
 
 
 def load(input_source: BinaryIO, output_source: TextIO = None) -> None | str:
-    bitstream = BufferedBitInput(input_source)
+    bitstream = BufferedStringInput(input_source)
 
     bin_sof_marker = bitstream.read(Settings.FIXED_CODE_SIZE)
     if Settings.FIXED_SYMBOL_LOOKUP[bin_sof_marker] != Settings.SOF_MARKER:

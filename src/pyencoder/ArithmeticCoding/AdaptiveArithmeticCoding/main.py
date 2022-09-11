@@ -1,7 +1,8 @@
-from typing import Generator, Iterable
+from typing import Generator
 
 from pyencoder import Settings
-from pyencoder.utils.BitIO import BufferedBitInput
+from pyencoder.utils.bitbuffer import BitIntegerBuffer
+
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding.codebook import AdaptiveArithmeticCodebook
 
 
@@ -81,24 +82,40 @@ class AdaptiveDecoder:
         self.codebook = AdaptiveArithmeticCodebook()
         self.reset()
 
-    def decode(self, bindata: str) -> Iterable[str]:
-        bitstream = BufferedBitInput(bindata, as_int=True)
+    def decode(self, bits: str | bytes | int) -> str:
+        if not self._primed:
+            if len(self.bitstream) < Settings.ArithmeticCoding.PRECISION:
+                self.bitstream.write(bits)
+                return ""
 
-        self.code_values = bitstream.read(Settings.ArithmeticCoding.PRECISION)
+            self.code_values = self.bitstream.read(Settings.ArithmeticCoding.PRECISION)
+
+            self._primed = True
+            self.decoder.send(None)
+
+        return self.decoder.send(bits)
+
+    def _decode(self) -> Generator[str, int, None]:
+        decoded_symbols = ""
 
         while True:
-            current_range = self.upper_limit - self.lower_limit + 1
+            if not self.bitstream and not self._flushed:
+                bits = yield decoded_symbols
+                if not self._flushed:
+                    self.bitstream.write(bits)
+                decoded_symbols = ""
+
             total_symbols = self.codebook.total_symbols
+            current_range = self.upper_limit - self.lower_limit + 1
 
             scaled_code_value = ((self.code_values - self.lower_limit + 1) * total_symbols - 1) // current_range
 
             sym, (sym_low, sym_high) = self.codebook.probability_symbol_search(scaled_code_value)
 
             if sym == Settings.EOF_MARKER:
-                self.reset()
-                break
+                yield decoded_symbols
 
-            yield sym
+            decoded_symbols += sym
             self.upper_limit = self.lower_limit + (sym_high * current_range // total_symbols) - 1
             self.lower_limit = self.lower_limit + (sym_low * current_range // total_symbols)
 
@@ -130,11 +147,31 @@ class AdaptiveDecoder:
 
                 self.lower_limit = self.lower_limit << 1
                 self.upper_limit = (self.upper_limit << 1) + 1
-                self.code_values = (self.code_values << 1) + (bitstream.read(1) or 0)
+
+                if not self.bitstream and not self._flushed:
+                    bits = yield decoded_symbols
+                    if not self._flushed:
+                        self.bitstream.write(bits)
+                    decoded_symbols = ""
+
+                self.code_values = (self.code_values << 1) + (self.bitstream.read(1) or 0)
+
+    def flush(self) -> str:
+        self._flushed = True
+        retval = self.decoder.send(None)
+        self.decoder.close()
+        self.reset()
+        return retval
 
     def reset(self) -> None:
         self.lower_limit = 0
         self.upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
         self.code_values = 0
+
+        self.bitstream = BitIntegerBuffer()
+        self._primed = False
+        self._flushed = False
+
+        self.decoder = self._decode()
 
         self.codebook.reset()

@@ -1,31 +1,38 @@
 from typing import BinaryIO, TextIO
 
-from pyencoder.utils.BitIO import BufferedBitOutput
-
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding import AdaptiveDecoder, AdaptiveEncoder
+from pyencoder.utils.BitIO.output import BufferedStringOutput
+from pyencoder.utils.BitIO.input import BufferedIntegerInput
+
+
+def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
+    bit_output = BufferedStringOutput(output_file)
+    encoder = AdaptiveEncoder()
+
+    for symbol in input_file.read():
+        bit_output.write(encoder.encode(symbol))
+
+    bit_output.write(encoder.flush())
+    bit_output.flush()
 
 
 def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
     decoder = AdaptiveDecoder()
+    bit_input = BufferedIntegerInput(input_file)
+
     if output_file:
-        for symbol in decoder.decode(input_file):
-            output_file.write(symbol)
-        return None
+        while True:
+            encoded_bits = bit_input.read(32)
+            if not encoded_bits:
+                output_file.write(decoder.flush())
+                return
+            output_file.write(decoder.decode(encoded_bits))
 
-    return "".join(decoder.decode(input_file))
-
-
-def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
-    bitstream = BufferedBitOutput(output_file)
-    encoder = AdaptiveEncoder()
+    decoded_data = ""
 
     while True:
-
-        symbol = input_file.read(1)
-
-        if not symbol:
-            bitstream.write(encoder.flush())
-            bitstream.flush()
-            break
-
-        bitstream.write(encoder.encode(symbol))
+        encoded_bits = bit_input.read(32)
+        if not encoded_bits:
+            decoded_data += decoder.flush()
+            return decoded_data
+        decoded_data += decoder.decode(encoded_bits)
