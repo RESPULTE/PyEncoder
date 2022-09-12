@@ -12,7 +12,7 @@ def adaptive_codebook(StringData) -> AAC_codebook.AdaptiveArithmeticCodebook:
     codebook = AAC_codebook.AdaptiveArithmeticCodebook()
     for sym, count in collections.Counter(StringData).most_common():
         codebook.symbol_catalogue[sym] = count
-    codebook.symbol_probability_bounds = list(itertools.accumulate(codebook.symbol_counts, initial=0))
+    codebook.symbol_probability_bounds = list(itertools.accumulate(codebook.symbol_catalogue.values(), initial=0))
     return codebook
 
 
