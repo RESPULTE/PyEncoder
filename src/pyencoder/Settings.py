@@ -71,6 +71,7 @@ class _Settings(metaclass=Singleton):
     class _ArithmeticCoding:
         PRECISION: int = 32
         MAX_FREQUENCY: int = (1 << 16) - 1
+        MAX_FREQUENCY_BITSIZE = MAX_FREQUENCY.bit_length()
 
         _FULL_RANGE: int = dataclasses.field(init=False)
         _HALF_RANGE: int = dataclasses.field(init=False)
@@ -99,15 +100,18 @@ class _Settings(metaclass=Singleton):
         def FULL_RANGE_BITMASK(self) -> int:
             return self._FULL_RANGE_BITMASK
 
-        def _recalibrate(self) -> None:
+        def _recalibrate_range(self) -> None:
             self._FULL_RANGE = 1 << self.PRECISION
             self._HALF_RANGE = self._FULL_RANGE >> 1
             self._QUARTER_RANGE = self._HALF_RANGE >> 1
             self._THREE_QUARTER_RANGE = self._HALF_RANGE + self._QUARTER_RANGE
             self._FULL_RANGE_BITMASK = self._FULL_RANGE - 1
 
+        def _recalibrate_max_frequency(self) -> None:
+            self.MAX_FREQUENCY_BITSIZE = self.MAX_FREQUENCY.bit_length()
+
         def __setattr__(self, __name: str, __value: int) -> None:
             super().__setattr__(__name, __value)
 
             if __name == "PRECISION":
-                self._recalibrate()
+                self._recalibrate_range()

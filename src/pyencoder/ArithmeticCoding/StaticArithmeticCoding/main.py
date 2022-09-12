@@ -108,6 +108,6 @@ def decode(codebook: ArithmeticCodebook, encoded_data: str) -> str:
 
             lower_limit = lower_limit << 1
             upper_limit = (upper_limit << 1) + 1
-            code_values = (code_values << 1) + (bitstream.read(1) or 0)
+            code_values = (code_values << 1) + (bitstream.read(1) or 0)  #! performance bomb
 
     return decoded_data

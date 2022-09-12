@@ -34,19 +34,21 @@ class MixinBufferedBitInput(IBufferedBitInput):
         if not hasattr(self.file_obj, "read"):
             raise TypeError(f"invalid type {type(file_obj)}")
 
-        self.source_reader = functools.partial(self.file_obj.read, buffer_size // 8)
-
-    def read(self, n: int) -> int | str:
+    def read(self, n: int = None) -> int | str:
         # if reading process is finished
         if self._flushed:
             return None
+
+        if n is None:
+            self.buffer.write(self.file_obj.read())
+            return self.flush()
 
         # if the bits left in the buffer is more than the requested amount
         if n <= len(self.buffer):
             return self.buffer.read(n)
 
         while len(self.buffer) < n:
-            source_data = self.source_reader()
+            source_data = self.file_obj.read(self.buffer_size // 8)
 
             if not source_data:
                 return self.flush()
@@ -56,6 +58,7 @@ class MixinBufferedBitInput(IBufferedBitInput):
         return self.buffer.read(n)
 
     def flush(self) -> str:
+        self._flushed = True
         return self.buffer.read()
 
 

@@ -2,7 +2,7 @@ from typing import BinaryIO, TextIO
 
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding import AdaptiveDecoder, AdaptiveEncoder
 from pyencoder.utils.BitIO.output import BufferedStringOutput
-from pyencoder.utils.BitIO.input import BufferedIntegerInput
+from pyencoder.utils.BitIO.input import BufferedStringInput
 
 
 def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
@@ -18,7 +18,7 @@ def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
 
 def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
     decoder = AdaptiveDecoder()
-    bit_input = BufferedIntegerInput(input_file)
+    bit_input = BufferedStringInput(input_file)
 
     if output_file:
         while True:

@@ -3,6 +3,8 @@ import heapq
 import collections
 from typing import List, NamedTuple, Dict
 
+from pyencoder import Settings
+
 
 class HuffmanNode(NamedTuple):
     frequency: int
@@ -15,6 +17,22 @@ class HuffmanNode(NamedTuple):
             bitlength=max(self.bitlength, other.bitlength) + 1,
             symbols=self.symbols + other.symbols,
         )
+
+    def __gt__(self, other: "HuffmanNode") -> bool:
+        if (
+            self.bitlength < Settings.HuffmanCoding.NUM_CODELENGTH
+            and other.bitlength < Settings.HuffmanCoding.NUM_CODELENGTH
+        ):
+            return self.frequency > other.frequency
+        return self.bitlength > other.bitlength
+
+    def __lt__(self, other: "HuffmanNode") -> bool:
+        if (
+            self.bitlength < Settings.HuffmanCoding.NUM_CODELENGTH
+            and other.bitlength < Settings.HuffmanCoding.NUM_CODELENGTH
+        ):
+            return self.frequency < other.frequency
+        return self.bitlength < other.bitlength
 
 
 def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
@@ -32,6 +50,10 @@ def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
         node_2 = heapq.heappop(to_process)
 
         new_node = node_1 + node_2
+        if len(to_process) != 0 and (new_node.bitlength + 1) > Settings.HuffmanCoding.NUM_CODELENGTH:
+            next_min_node = heapq.heapreplace(to_process, node_2)
+            new_node = node_1 + next_min_node
+
         for sym in new_node.symbols:
             codebook[sym] += 1
 

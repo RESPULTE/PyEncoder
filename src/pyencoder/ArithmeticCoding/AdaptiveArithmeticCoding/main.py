@@ -21,7 +21,7 @@ class AdaptiveEncoder:
             sym = yield code
 
             code = ""
-            total_symbols = self.codebook.total_symbols
+            total_symbols = self.codebook.symbol_counts
             sym_low, sym_high = self.codebook.catalogue_symbol(sym)
 
             current_range = self.upper_limit - self.lower_limit + 1
@@ -105,7 +105,7 @@ class AdaptiveDecoder:
                     self.bitstream.write(bits)
                 decoded_symbols = ""
 
-            total_symbols = self.codebook.total_symbols
+            total_symbols = self.codebook.symbol_counts
             current_range = self.upper_limit - self.lower_limit + 1
 
             scaled_code_value = ((self.code_values - self.lower_limit + 1) * total_symbols - 1) // current_range

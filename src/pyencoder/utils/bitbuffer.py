@@ -1,5 +1,6 @@
 import abc
 import collections
+import itertools
 from typing import Iterable, Tuple
 from pyencoder import Settings
 
@@ -26,56 +27,66 @@ class BitBuffer(abc.ABC):
         ...
 
 
-class BitIntegerBuffer(BitBuffer):
-    def __init__(self, data: bytes | str | int = None) -> None:
-        self._queue = collections.deque([])
-        if not data:
-            return
+# class BitIntegerBuffer(BitBuffer):
+#     def __init__(self, data: bytes | str | int = None) -> None:
+#         self._queue = self._iterate(0, 0)
+#         self._size = 0
+#         self._flushed = False
+#         if not data:
+#             return
 
-        self.write(data)
+#         self.write(data)
 
-    def _convert(self, data: bytes | str | int) -> Tuple[int, int]:
-        if isinstance(data, str):
-            as_int = int(data, 2)
-            size = len(data)
-        elif isinstance(data, bytes):
-            as_int = int.from_bytes(data, Settings.ENDIAN)
-            size = len(data) * 8
-        elif isinstance(data, int):
-            as_int = data
-            size = data.bit_length()
-        else:
-            raise TypeError("invalid type: {0}".format(type(data).__name__))
+#     def _convert(self, data: bytes | str | int) -> Tuple[int, int]:
+#         if isinstance(data, str):
+#             as_int = int(data, 2)
+#             size = len(data)
+#         elif isinstance(data, bytes):
+#             as_int = int.from_bytes(data, Settings.ENDIAN)
+#             size = len(data) * 8
+#         elif isinstance(data, int):
+#             as_int = data
+#             size = data.bit_length()
+#         else:
+#             raise TypeError("invalid type: {0}".format(type(data).__name__))
 
-        return as_int, size
+#         return as_int, size
 
-    def write(self, data: bytes | str | int) -> None:
-        self._queue.extend(self._iterate(*self._convert(data)))
+#     def write(self, data: bytes | str | int) -> None:
+#         data, size = self._convert(data)
+#         self._size += size
+#         self._queue = itertools.chain(self._queue, self._iterate(data, size))
 
-    def read(self, n: int = None) -> None | int:
-        if self._queue:
-            if n is None:
-                n = len(self._queue)
+#     def read(self, n: int = None) -> None | int:
+#         if not self._flushed:
+#             if n is None:
+#                 n = len(self._queue)
 
-            i = 0
-            buffer = 0
-            while i < n:
-                buffer = (buffer << 1) + self._queue.popleft()
-                i += 1
-            return buffer
+#             if n > self._size:
+#                 self._flushed = True
+#                 n = self._size
 
-        return None
+#             i = 0
+#             buffer = 0
+#             while i < n:
+#                 buffer = (buffer << 1) + next(self._queue)
+#                 i += 1
 
-    @staticmethod
-    def _iterate(__ints: int, __size: int) -> Iterable[int]:
-        for i in range(__size - 1, -1, -1):
-            yield (__ints >> i) & 1
+#             self._size -= n
+#             return buffer
 
-    def __bool__(self) -> bool:
-        return not not self._queue
+#         return None
 
-    def __len__(self) -> int:
-        return len(self._queue)
+#     @staticmethod
+#     def _iterate(__ints: int, __size: int) -> Iterable[int]:
+#         for i in range(__size - 1, -1, -1):
+#             yield (__ints >> i) & 1
+
+#     def __bool__(self) -> bool:
+#         return self._size > 0
+
+#     def __len__(self) -> int:
+#         return self._size
 
 
 class BitStringBuffer(BitBuffer):
@@ -107,7 +118,7 @@ class BitStringBuffer(BitBuffer):
     def read(self, n: int = None) -> str | None:
         if self._queue:
             if n is None:
-                retval = "".join(self._queue)
+                retval = self._queue
                 self._queue = ""
                 return retval
 
@@ -123,3 +134,11 @@ class BitStringBuffer(BitBuffer):
 
     def __len__(self) -> int:
         return len(self._queue)
+
+class BitIntegerBuffer(BitStringBuffer):
+
+    def read(self, n: int=None) -> None:
+        retval = super().read(n)
+        if retval:
+            return int(retval, 2)
+        return retval

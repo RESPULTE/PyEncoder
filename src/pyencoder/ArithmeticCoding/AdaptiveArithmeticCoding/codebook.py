@@ -11,12 +11,8 @@ class AdaptiveArithmeticCodebook:
 
     def reset(self) -> None:
         self.symbol_catalogue = OrderedDict({k: 1 for k in Settings.SYMBOLS})
-        self.symbol_counts = self.symbol_catalogue.values()
-        self.symbol_probability_bounds = list(itertools.accumulate(self.symbol_counts, initial=0))
-
-    @property
-    def total_symbols(self) -> int:
-        return sum(self.symbol_counts)
+        self.symbol_counts = sum(self.symbol_catalogue.values())
+        self.symbol_probability_bounds = list(itertools.accumulate(self.symbol_catalogue.values(), initial=0))
 
     def probability_symbol_search(self, probability: int) -> Tuple[str, Tuple[int, int]]:
         sym_probs = self.symbol_probability_bounds
@@ -41,7 +37,7 @@ class AdaptiveArithmeticCodebook:
 
     def _update(self, symbol: str, index: int) -> None:
         self.symbol_catalogue[symbol] += 1
+        self.symbol_counts += 1
 
         for i in range(index + 1, Settings.NUM_SYMBOLS + 1):
-            if self.symbol_probability_bounds[i] < Settings.ArithmeticCoding.MAX_FREQUENCY:
-                self.symbol_probability_bounds[i] += 1
+            self.symbol_probability_bounds[i] += 1

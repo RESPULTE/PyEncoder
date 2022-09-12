@@ -17,7 +17,7 @@ def adaptive_codebook(StringData) -> AAC_codebook.AdaptiveArithmeticCodebook:
 
 
 def test_adaptive_codebook_symbol_search(adaptive_codebook: AAC_codebook.AdaptiveArithmeticCodebook) -> None:
-    for i in range(1, adaptive_codebook.total_symbols, 2):
+    for i in range(1, adaptive_codebook.symbol_counts, 2):
         _, (sym_low, sym_high) = adaptive_codebook.probability_symbol_search(i)
         assert sym_low <= i <= sym_high
 
