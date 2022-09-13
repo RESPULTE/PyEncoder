@@ -41,6 +41,11 @@ def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
     if len(counted_dataset) == 1:
         return {counted_dataset.pop()[0], 1}
 
+    if any(sym not in Settings.SYMBOLS for sym, _ in counted_dataset):
+        raise ValueError(
+            f"unknown symbol detected: ({next(filter(lambda x: x[0] in Settings.SYMBOLS, counted_dataset))})"
+        )
+
     codebook = {symbol: 0 for symbol, _ in counted_dataset}
     to_process = [HuffmanNode(freq, 1, [symbol]) for symbol, freq in counted_dataset]
     heapq.heapify(to_process)
@@ -58,6 +63,11 @@ def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
             codebook[sym] += 1
 
         heapq.heappush(to_process, new_node)
+
+    if any(x > Settings.HuffmanCoding.NUM_CODELENGTH for x in codebook.values()):
+        raise OverflowError(
+            "symbol's bitsize exceeded the default bitsize, unique symbol's count is ({0})".format(len(codebook))
+        )
 
     return codebook
 

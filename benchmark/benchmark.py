@@ -1,7 +1,9 @@
+import cProfile
+
+
 def main():
     import os
     import time
-    import difflib
     import tempfile
 
     from pyencoder.ArithmeticCoding import AdaptiveArithmeticCoding, StaticArithmeticCoding
@@ -32,6 +34,7 @@ def main():
 
             start_encode = time.perf_counter()
 
+            # cProfile.runctx("algo.dump(file_to_encode, encoded_file)", globals(), locals(), sort="cumtime")
             algo.dump(file_to_encode, encoded_file)
 
             encoded_file.seek(0)

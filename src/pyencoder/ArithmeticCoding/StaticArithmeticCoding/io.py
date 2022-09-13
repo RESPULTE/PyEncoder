@@ -6,12 +6,13 @@ from pyencoder.utils.BitIO.input import BufferedStringInput
 
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.main import decode, encode
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import ArithmeticCodebook
+from pyencoder.utils.BitIO.output import BufferedStringOutput
 
 
-def load(input_file: BinaryIO, output_file: TextIO | None) -> None | str:
-    codebook, leftover_bits = generate_codebook_from_header(input_file)
+def load(input_source: BinaryIO, output_file: TextIO | None) -> None | str:
+    codebook, leftover_bits = generate_codebook_from_header(input_source)
 
-    encoded_data: str = "{0:0b}".format(int.from_bytes(input_file.read(), Settings.ENDIAN))
+    encoded_data = "".join(f"{x:08b}" for x in input_source.read())
 
     encoded_data = encoded_data.rjust(8 * -(-len(encoded_data) // 8), "0")
     decoded_data = decode(codebook, leftover_bits + encoded_data)
@@ -21,9 +22,14 @@ def load(input_file: BinaryIO, output_file: TextIO | None) -> None | str:
     output_file.write("".join(decoded_data))
 
 
-def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
-    data = input_file.read() if hasattr(input_file, "read") else input_file
-    codebook, encoded_data = encode(data)
+def dump(input_source: TextIO | str, output_file: BinaryIO) -> None:
+    if hasattr(input_source, "read"):
+        input_source = input_source.read()
+
+    elif not isinstance(input_source, str):
+        raise TypeError(f"Invalid type: {type(input_source).__name__}")
+
+    codebook, encoded_data = encode(input_source)
     header = generate_header_from_codebook(codebook)
 
     if not output_file:
@@ -34,7 +40,7 @@ def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
     size = len(data)
     data = data.ljust(8 * -(-size // 8), "0")
 
-    bytes_to_output = int.to_bytes(int(data, 2), -(-size // 8), Settings.ENDIAN)
+    bytes_to_output = bytes([int(data[i : i + 8], 2) for i in range(0, len(data), 8)])
     output_file.write(bytes_to_output)
 
 
@@ -49,10 +55,10 @@ def generate_header_from_codebook(codebook: ArithmeticCodebook) -> str:
     return header
 
 
-def generate_codebook_from_header(input_file: BinaryIO) -> ArithmeticCodebook:
+def generate_codebook_from_header(input_source: BinaryIO) -> ArithmeticCodebook:
     # if chr(bitstream.read(Config["SYMBOL_BITSIZE"])) != Config["SOF_MARKER"]:
     #     raise Exception("SOF not detected")
-    bitstream = BufferedStringInput(input_file)
+    bitstream = BufferedStringInput(input_source)
     codebook = OrderedDict()
     while True:
 

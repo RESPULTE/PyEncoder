@@ -3,7 +3,7 @@ from typing import BinaryIO, TextIO, Dict, List
 
 from pyencoder import Settings
 
-from pyencoder.type_hints import CorruptedHeaderError, CorruptedEncodingError
+from pyencoder.error import CorruptedHeaderError, CorruptedEncodingError
 from pyencoder.utils.BitIO.input import BufferedStringInput
 from pyencoder.utils.BitIO.output import BufferedStringOutput
 
@@ -17,6 +17,12 @@ def read_codelengths(bindata) -> List[int]:
     for i in range(0, len(bindata), Settings.HuffmanCoding.CODELENGTH_BITSIZE):
         bin_symbol_count = bindata[i : i + Settings.HuffmanCoding.CODELENGTH_BITSIZE]
         num_symbols_per_codelength.append(int(bin_symbol_count, 2))
+
+    if len(num_symbols_per_codelength) != Settings.HuffmanCoding.NUM_CODELENGTH:
+        err_msg = "size of codelength's data ({0}) does not match default codelength's data size ({1})"
+        raise CorruptedHeaderError(
+            err_msg.format(len(num_symbols_per_codelength), Settings.HuffmanCoding.NUM_CODELENGTH)
+        )
 
     return num_symbols_per_codelength
 
@@ -33,12 +39,6 @@ def read_symbols(bindata) -> List[str]:
 def generate_codebook_from_header(bitstream: BufferedStringInput) -> Dict[str, str]:
     bin_codelengths = bitstream.read(Settings.HuffmanCoding.CODELENGTH_BITSIZE * Settings.HuffmanCoding.NUM_CODELENGTH)
     num_symbols_per_codelength = read_codelengths(bin_codelengths)
-
-    if len(num_symbols_per_codelength) != Settings.HuffmanCoding.NUM_CODELENGTH:
-        err_msg = "size of codelength's data ({0}) does not match default codelength's data size ({1})"
-        raise CorruptedHeaderError(
-            err_msg.format(len(num_symbols_per_codelength), Settings.HuffmanCoding.NUM_CODELENGTH)
-        )
 
     num_symbols = sum(num_symbols_per_codelength)
     bin_symbols = bitstream.read(num_symbols * Settings.FIXED_CODE_SIZE)
@@ -86,11 +86,11 @@ def dump(input_source: str | TextIO, output_source: BinaryIO) -> None:
     sof_marker = Settings.FIXED_CODE_LOOKUP[Settings.SOF_MARKER]
     bitstream.write(sof_marker)
 
-    if not isinstance(input_source, str):
-        try:
-            input_source = input_source.read() + Settings.EOF_MARKER
-        except AttributeError as err:
-            raise TypeError(f"Invalid input source: {type(input_source).__name__}") from err
+    if hasattr(input_source, "read"):
+        input_source = input_source.read() + Settings.EOF_MARKER
+
+    elif not isinstance(input_source, str):
+        raise TypeError(f"Invalid type: {type(input_source).__name__}")
 
     codebook = generate_canonical_codebook(input_source)
     header = generate_header_from_codebook(codebook)
@@ -120,8 +120,10 @@ def load(input_source: BinaryIO, output_source: TextIO = None) -> None | str:
 
             if curr_code not in codebook:
                 continue
-
-            symbol = codebook[curr_code]
+            try:
+                symbol = codebook[curr_code]
+            except KeyError as err:
+                raise CorruptedEncodingError("encoding cannot be decoded") from err
 
             if symbol == Settings.EOF_MARKER:
                 return
@@ -129,6 +131,6 @@ def load(input_source: BinaryIO, output_source: TextIO = None) -> None | str:
             output_source.write(symbol)
             curr_code = ""
 
-        raise CorruptedEncodingError("EOF not Detected")
+        raise EOFError("EOF not Detected")
 
     return decode(codebook, bitstream)

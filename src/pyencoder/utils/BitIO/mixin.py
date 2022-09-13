@@ -1,5 +1,5 @@
 import functools
-from typing import BinaryIO
+from typing import BinaryIO, Iterable
 
 from pyencoder import Settings
 

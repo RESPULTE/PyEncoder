@@ -2,6 +2,7 @@ from typing import Generator
 
 from pyencoder import Settings
 from pyencoder.utils.bitbuffer import BitStringBuffer
+from pyencoder.utils.misc import check_is_symbol
 
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanTree, get_huffman_code
 
@@ -14,15 +15,19 @@ class AdaptiveEncoder(AdaptiveHuffmanTree):
         self._encoder.send(None)
 
     def encode(self, symbol: str) -> str:
+        check_is_symbol(symbol)
+
         return self._encoder.send(symbol)
 
     def flush(self) -> str:
         retval = self._encoder.send(Settings.EOF_MARKER)
         self._encoder.close()
+        self.reset()
         return retval
 
     def _encode(self) -> Generator[str, str, None]:
         huffman_code = ""
+
         while True:
             symbol = yield huffman_code
             if symbol in self.symbol_catalogue:
@@ -58,7 +63,9 @@ class AdaptiveDecoder(AdaptiveHuffmanTree):
             if len(self.bitstream) < Settings.FIXED_CODE_SIZE:
                 return ""
 
-            symbol = Settings.FIXED_SYMBOL_LOOKUP[self.bitstream.read(Settings.FIXED_CODE_SIZE)]
+            code = self.bitstream.read(Settings.FIXED_CODE_SIZE)
+            symbol = Settings.FIXED_SYMBOL_LOOKUP[code]
+
             self._update(symbol)
             self._primed = True
             return symbol
@@ -68,6 +75,7 @@ class AdaptiveDecoder(AdaptiveHuffmanTree):
     def _decode(self) -> Generator[str, str, None]:
         current_node = self.root
         decoded_symbols = ""
+
         while True:
 
             bits = yield decoded_symbols
@@ -82,14 +90,16 @@ class AdaptiveDecoder(AdaptiveHuffmanTree):
                 elif new_bit == "1":
                     current_node = current_node.right
                 else:
-                    raise ValueError(f"invalid bit found: {new_bit}")
+                    raise ValueError(f"invalid bit found: ({new_bit})")
 
                 if current_node is self.NYT:
                     while len(self.bitstream) < Settings.FIXED_CODE_SIZE:
                         bits = yield ""
                         self.bitstream.write(bits)
 
-                    new_symbol = Settings.FIXED_SYMBOL_LOOKUP[self.bitstream.read(Settings.FIXED_CODE_SIZE)]
+                    code = self.bitstream.read(Settings.FIXED_CODE_SIZE)
+                    new_symbol = Settings.FIXED_SYMBOL_LOOKUP[code]
+
                     if new_symbol == Settings.EOF_MARKER:
                         yield decoded_symbols
                         return

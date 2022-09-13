@@ -34,5 +34,7 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
         encoded_bits = bit_input.read(8)
         if not encoded_bits:
             decoded_data += decoder.flush()
+            if not decoded_data:
+                raise EOFError("EOF without any data")
             return decoded_data
         decoded_data += decoder.decode(encoded_bits)

@@ -1,6 +1,6 @@
 from typing import Iterable, Optional, List, Tuple, overload
 
-from pyencoder.type_hints import _T
+from pyencoder.error import _T
 
 
 @overload

@@ -12,6 +12,9 @@ def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
     for symbol in input_file.read():
         bit_output.write(encoder.encode(symbol))
 
+    if "symbol" not in locals():
+        raise EOFError("EOF reached without any data")
+
     bit_output.write(encoder.flush())
     bit_output.flush()
 
@@ -34,5 +37,8 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> str | None:
         encoded_bits = bit_input.read(32)
         if not encoded_bits:
             decoded_data += decoder.flush()
+            if not decoded_data:
+                raise EOFError("EOF reached without any data")
+
             return decoded_data
         decoded_data += decoder.decode(encoded_bits)

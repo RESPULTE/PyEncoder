@@ -136,11 +136,3 @@ class BitStringBuffer(BitBuffer):
 
     def __len__(self) -> int:
         return len(self._queue)
-
-
-# class BitIntegerBuffer(BitStringBuffer):
-#     def read(self, n: int = None) -> None:
-#         retval = super().read(n)
-#         if retval:
-#             return int(retval, 2)
-#         return retval

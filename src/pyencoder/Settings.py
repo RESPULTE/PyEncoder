@@ -13,6 +13,7 @@ class Singleton(type):
         return cls._instances[cls]
 
 
+
 @dataclasses.dataclass
 class _Settings(metaclass=Singleton):
     ENDIAN: str = "big"

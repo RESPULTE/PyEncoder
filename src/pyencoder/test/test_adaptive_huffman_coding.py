@@ -11,7 +11,6 @@ def completed_tree(StringData) -> AdaptiveHuffmanCoding.AdaptiveEncoder:
     encoder = AdaptiveHuffmanCoding.AdaptiveEncoder()
     for sym in StringData:
         encoder.encode(sym)
-    encoder.flush()
     return encoder
 
 
