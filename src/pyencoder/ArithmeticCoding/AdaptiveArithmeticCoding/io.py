@@ -22,7 +22,7 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
 
     if output_file:
         while True:
-            encoded_bits = bit_input.read(32)
+            encoded_bits = bit_input.read(8)
             if not encoded_bits:
                 output_file.write(decoder.flush())
                 return
@@ -31,7 +31,7 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
     decoded_data = ""
 
     while True:
-        encoded_bits = bit_input.read(32)
+        encoded_bits = bit_input.read(8)
         if not encoded_bits:
             decoded_data += decoder.flush()
             return decoded_data

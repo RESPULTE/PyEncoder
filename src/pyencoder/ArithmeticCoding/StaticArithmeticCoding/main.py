@@ -1,4 +1,5 @@
-from typing import Dict, Tuple
+import itertools
+from typing import Dict, Literal, Tuple
 
 from pyencoder import Settings
 from pyencoder.utils.bitbuffer import BitIntegerBuffer
@@ -58,11 +59,23 @@ def encode(data: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
 
 
 def decode(codebook: ArithmeticCodebook, encoded_data: str) -> str:
+    def iter_bit(__str: str) -> Literal[0, 1]:
+        i = 0
+
+        try:
+            while True:
+                yield int(__str[i])
+                i += 1
+
+        except IndexError:
+            while True:
+                yield 0
+
     lower_limit = 0
     upper_limit = Settings.ArithmeticCoding.FULL_RANGE_BITMASK
 
-    bitstream = BitIntegerBuffer(encoded_data)
-    code_values = bitstream.read(Settings.ArithmeticCoding.PRECISION)
+    code_values = int(encoded_data[: Settings.ArithmeticCoding.PRECISION], 2)
+    bitstream = iter_bit(encoded_data[Settings.ArithmeticCoding.PRECISION :])
 
     decoded_data = ""
     total_elems = codebook.total_elems
@@ -108,6 +121,7 @@ def decode(codebook: ArithmeticCodebook, encoded_data: str) -> str:
 
             lower_limit = lower_limit << 1
             upper_limit = (upper_limit << 1) + 1
-            code_values = (code_values << 1) + (bitstream.read(1) or 0)  #! performance bomb
+
+            code_values = (code_values << 1) + next(bitstream)
 
     return decoded_data

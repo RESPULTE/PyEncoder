@@ -23,8 +23,7 @@ class MixinBufferedStringIO(IBufferedBitTypeIO):
         self.buffer = BitStringBuffer()
 
     def _convert_to_bytes(self, data: str) -> bytes:
-        _int = int(data, 2)
-        return int.to_bytes(_int, -(-len(data) // 8), Settings.ENDIAN)
+        return int.to_bytes(int(data, 2), -(-len(data) // 8), Settings.ENDIAN)
 
 
 class MixinBufferedBitInput(IBufferedBitInput):

@@ -1,5 +1,4 @@
 import abc
-import collections
 import itertools
 from typing import Iterable, Tuple
 from pyencoder import Settings
@@ -61,7 +60,11 @@ class BitIntegerBuffer(BitBuffer):
 
     def read(self, n: int = None) -> None | int:
         if not self._flushed and self._size != 0:
-            if n is None or n > self._size:
+            if n == 1:
+                self._size -= 1
+                return next(self._queue)
+
+            elif n is None or n > self._size:
                 self._flushed = True
                 n = self._size
 
@@ -101,7 +104,7 @@ class BitStringBuffer(BitBuffer):
             as_str = data
 
         elif isinstance(data, bytes):
-            as_str = "{0:0{size}b}".format(int.from_bytes(data, Settings.ENDIAN), size=len(data) * 8)
+            as_str = "".join(f"{x:08b}" for x in data)
 
         elif isinstance(data, int):
             as_str = "{0:b}".format(data)

@@ -1,6 +1,7 @@
 def main():
     import os
     import time
+    import difflib
     import tempfile
 
     from pyencoder.ArithmeticCoding import AdaptiveArithmeticCoding, StaticArithmeticCoding
@@ -16,8 +17,8 @@ def main():
 
     filesize = os.path.getsize(filedir)
     entropy_coding_algorithms = [
-        AdaptiveArithmeticCoding,
         StaticArithmeticCoding,
+        AdaptiveArithmeticCoding,
         AdaptiveHuffmanCoding,
         StaticHuffmanCoding,
     ]
@@ -53,11 +54,13 @@ def main():
                 print("[DONE]: time taken '{0:0.{1}f} sec'".format(time_taken_decode, sigfig))
 
                 print("checking file integerity...")
-                assert (
-                    decoded_file.read() == file_to_encode.read()
-                ), "[FAILED]: decoded file does not match original file"
+                data_1, data_2 = decoded_file.read(), file_to_encode.read()
+                if data_1 != data_2:
+                    print("[FAILED]: decoded file does not match original file")
+                    raise RuntimeError("you goofed up bro")
+
                 print(
-                    "[SUCCESS]:compression_ratio {0:0.{3}f}, encode_decode_ratio: {2:0.{3}f}, total_time: {1:0.{3}f} sec".format(
+                    "[SUCCESS]:compression_ratio {0:0.{3}f} | encode_decode_ratio: {2:0.{3}f} | total_time: {1:0.{3}f} sec".format(
                         (filesize / os.path.getsize(encoded_file.name)),
                         end_decode - start_encode,
                         time_taken_encode / time_taken_decode,
