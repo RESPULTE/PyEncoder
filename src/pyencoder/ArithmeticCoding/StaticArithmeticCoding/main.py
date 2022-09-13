@@ -1,15 +1,25 @@
-from typing import Dict, Literal, Tuple
+from typing import Dict, Iterable, Literal, Tuple
 
 from pyencoder import Settings
-from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import ArithmeticCodebook
+from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import StaticArithmeticCodebook
 
 _SAC = Settings.ArithmeticCoding
 
 
-def encode(data: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
+def encode(data: str) -> Tuple[StaticArithmeticCodebook, str]:
+    """
+
+    encodes stirng using StaticArithmeticCoding Algorithm
+
+    Args:
+        data (str): string, containing whatever the f you want
+
+    Returns:
+        Tuple[StaticArithmeticCodebook, str]: codebook and the encoded data
+    """
     data += Settings.EOF_MARKER
 
-    codebook = ArithmeticCodebook.from_dataset(data)
+    codebook = StaticArithmeticCodebook.from_dataset(data)
 
     lower_limit = 0
     upper_limit = _SAC.FULL_RANGE_BITMASK
@@ -54,8 +64,28 @@ def encode(data: str) -> Tuple[Dict[str, Tuple[int, int]], str]:
     return codebook, encoded_data
 
 
-def decode(codebook: ArithmeticCodebook, encoded_data: str) -> str:
-    def iter_bit(__str: str) -> Literal[0, 1]:
+def decode(codebook: StaticArithmeticCodebook, encoded_data: str) -> str:
+    """
+    decodes encoded data using Arithmetic Coding Algorithm
+
+    Args:
+        codebook (StaticArithmeticCodebook): codebook, oml you cant be this dum
+        encoded_data (str): bitcode, str containing only 0s and 1s
+
+    Returns:
+        str: the original dataset (hopefully)
+    """
+
+    def iter_bit(__str: str) -> Iterable[Literal[0, 1]]:
+        """
+        a helper function to return the encoded data bit by bit as integers
+
+        Args:
+            __str (str): bitcode, string containing 0s and 1s
+
+        Yields:
+            Iterator[Literal[0, 1]]: ...
+        """
         i = 0
 
         try:

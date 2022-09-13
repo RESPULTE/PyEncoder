@@ -6,6 +6,13 @@ from pyencoder.utils.BitIO.input import BufferedStringInput
 
 
 def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
+    """
+    reads text from a file or string, encode 'em and dump them into an output file
+
+    Args:
+        input_file (TextIO | str): a file containing text or just some strings
+        output_file (BinaryIO): a file that can be written with bytes
+    """    
     bit_output = BufferedStringOutput(output_file)
     encoder = AdaptiveEncoder()
 
@@ -17,6 +24,19 @@ def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
 
 
 def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
+    """
+    reads encoded data from a file, decode 'em and loads them into a file (if any)
+
+    Args:
+        input_file (BinaryIO): a file with encoded data
+        output_file (TextIO, optional): an output file, will return strings if not given. Defaults to None.
+
+    Raises:
+        EOFError: if the input file doesnt contain anything
+
+    Returns:
+        None | str: if output file is not provided, strings will be returned instead
+    """    
     decoder = AdaptiveDecoder()
     bit_input = BufferedStringInput(input_file)
 

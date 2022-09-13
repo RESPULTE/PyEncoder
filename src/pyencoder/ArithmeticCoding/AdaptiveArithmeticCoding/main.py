@@ -2,7 +2,6 @@ from typing import Generator
 
 from pyencoder import Settings
 from pyencoder.utils.bitbuffer import BitIntegerBuffer
-from pyencoder.utils.misc import check_is_symbol
 
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding.codebook import AdaptiveArithmeticCodebook
 
@@ -10,6 +9,14 @@ _SAC = Settings.ArithmeticCoding
 
 
 class AdaptiveEncoder:
+    """
+    An Adaptive version of the Arithmetic Coding
+
+    - implemented with a bi-directional generator method,
+      because it is needed for the adaptive nature of the algorithm
+      and also why not its sounds cool
+    """
+
     def __init__(self):
         self.lower_limit = 0
         self.upper_limit = _SAC.FULL_RANGE_BITMASK
@@ -21,10 +28,31 @@ class AdaptiveEncoder:
         self.encoder.send(None)
 
     def encode(self, symbol: str) -> str:
-        check_is_symbol(symbol)
+        """
+        an user function, essentially a wrapper around the generator method
+        thats actually doing the encoding
+
+        Args:
+            symbol (str): a string object with length of 1
+
+        Raises:
+            ValueError: if the symbol is not registered in the central "Settings" object
+
+        Returns:
+            str: the bitcode//encoded data
+        """
+        if symbol not in Settings.SYMBOLS:
+            raise ValueError(f"unknown symbol detected: {symbol}")
         return self.encoder.send(symbol)
 
     def _encode(self) -> Generator[str, str, None]:
+        """
+        the method that's doing the heavy lifting.
+
+
+        Yields:
+            Generator[str, str, None]: takes in symbols, yields bitcodes//encoded_data
+        """
         code = ""
 
         while True:
@@ -62,6 +90,15 @@ class AdaptiveEncoder:
                 self.upper_limit &= _SAC.FULL_RANGE_BITMASK
 
     def flush(self) -> str:
+        """
+        encodes an EOF_MARKER, plus a few more EOF bits to ensure the data can be decoded
+
+        the extra few bits at the end (after the EOF marker) is to ensure that the overall value of the
+        encoded data lies within the upper and lower limit (when the encoding is finished)
+
+        Returns:
+            str: bitcode//encoded_data
+        """
         code = self.encoder.send(Settings.EOF_MARKER)
 
         self.num_pending_bits += 1
@@ -73,10 +110,21 @@ class AdaptiveEncoder:
         return retval
 
     def reset(self) -> None:
+        """
+        exists for the sole purpose of clarity
+        """
         self.__init__()
 
 
 class AdaptiveDecoder:
+    """
+    An Adaptive version of the Arithmetic Coding
+
+    - implemented with a bi-directional generator method,
+      because it is needed for the adaptive nature of the algorithm
+      and also why not its sounds cool
+    """
+
     def __init__(self) -> None:
         self.lower_limit = 0
         self.upper_limit = _SAC.FULL_RANGE_BITMASK
@@ -89,7 +137,18 @@ class AdaptiveDecoder:
         self.codebook = AdaptiveArithmeticCodebook()
         self.decoder = self._decode()  # ! DO NOT ACTIVATE THE DECODER BEFORE INSTANTIATING CODE_VALUES
 
-    def decode(self, bits: str | bytes | int) -> str:
+    def decode(self, bits: str) -> str:
+        """
+        an user function, essentially a wrapper around the generator method
+        thats actually doing the decoding
+
+        Args:
+            bits (str): bitcode, strigns that only contain 1s and/or 0s
+
+
+        Returns:
+            str: deocded symbol(s) if any, if not, it'll be an empty string
+        """
         if not self._primed:
             if len(self.bitstream) < _SAC.PRECISION:
                 self.bitstream.write(bits)
@@ -103,6 +162,14 @@ class AdaptiveDecoder:
         return self.decoder.send(bits)
 
     def _decode(self) -> Generator[str, int, None]:
+        """
+        the method that's doing the heavy lifting.
+
+
+        Yields:
+            Generator[str, int, None]: takes in bitcodes//encoded_data,
+                                       yields symbol(s, might be None, in which case the yield value would be "")
+        """
         decoded_symbols = ""
 
         while True:
@@ -161,10 +228,20 @@ class AdaptiveDecoder:
                 self.code_values = (self.code_values << 1) + (self.bitstream.read(1) or 0)
 
     def flush(self) -> str:
+        """
+        tells the underlying decoder generator to keep decoding until
+        EOF symbol is detected, in which it would spit out all the said symbols
+
+        Returns:
+            str: deocded symbol(s) if any, if not, it'll be an empty string
+        """
         self._flushed = True
         retval = self.decoder.send(None)
         self.reset()
         return retval
 
     def reset(self) -> None:
+        """
+        exists for the sole purpose of clarity
+        """
         self.__init__()
