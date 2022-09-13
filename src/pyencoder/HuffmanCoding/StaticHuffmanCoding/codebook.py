@@ -4,6 +4,7 @@ import collections
 from typing import List, NamedTuple, Dict
 
 from pyencoder import Settings
+from pyencoder.error import UnknownSymbolError
 
 
 class HuffmanNode(NamedTuple):
@@ -42,9 +43,7 @@ def generate_codebook_from_dataset(dataset: str = None) -> Dict[str, str]:
         return {counted_dataset.pop()[0], 1}
 
     if any(sym not in Settings.SYMBOLS for sym, _ in counted_dataset):
-        raise ValueError(
-            f"unknown symbol detected: ({next(filter(lambda x: x[0] in Settings.SYMBOLS, counted_dataset))})"
-        )
+        raise UnknownSymbolError([sym for sym, _ in counted_dataset if sym not in Settings.SYMBOLS][0])
 
     codebook = {symbol: 0 for symbol, _ in counted_dataset}
     to_process = [HuffmanNode(freq, 1, [symbol]) for symbol, freq in counted_dataset]

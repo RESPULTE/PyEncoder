@@ -27,46 +27,43 @@ class BitBuffer(abc.ABC):
 
 
 class BitIntegerBuffer(BitBuffer):
-    def __init__(self, data: bytes | str | int = None) -> None:
-        self._queue = self._iterate(0, 0)
-        self._flushed = False
+    def __init__(self, data: bytes | str = None) -> None:
         self._size = 0
+        self._queue = None
+        self._flushed = False
 
         if not data:
             return
 
         self.write(data)
 
-    def _convert(self, data: bytes | str | int) -> Tuple[int, int]:
+    def _convert(self, data: bytes | str) -> Tuple[int, int]:
         if isinstance(data, str):
-            as_int = int(data, 2)
-            size = len(data)
+            return self.iterate_str_as_int(data), len(data)
         elif isinstance(data, bytes):
-            as_int = int.from_bytes(data, Settings.ENDIAN)
-            size = len(data) * 8
-        elif isinstance(data, int):
-            as_int = data
-            size = data.bit_length()
-        else:
-            raise TypeError("invalid type: {0}".format(type(data).__name__))
+            return self._iterate_bytes_as_int(data), len(data) * 8
 
-        return as_int, size
+        raise TypeError("invalid type: {0}".format(type(data).__name__))
 
-    def write(self, data: bytes | str | int) -> None:
-        data, size = self._convert(data)
-
-        self._queue = itertools.chain(self._queue, self._iterate(data, size))
+    def write(self, data: bytes | str) -> None:
+        _iterator, size = self._convert(data)
         self._size += size
+        self._flushed = False
+
+        if self._queue != None:
+            self._queue = itertools.chain(self._queue, _iterator)
+            return
+        self._queue = _iterator
 
     def read(self, n: int = None) -> None | int:
         if not self._flushed and self._size != 0:
+            if n is None or n >= self._size:
+                self._flushed = True
+                n = self._size
+
             if n == 1:
                 self._size -= 1
                 return next(self._queue)
-
-            elif n is None or n > self._size:
-                self._flushed = True
-                n = self._size
 
             i = 0
             buffer = 0
@@ -80,9 +77,15 @@ class BitIntegerBuffer(BitBuffer):
         return None
 
     @staticmethod
-    def _iterate(__ints: int, __size: int) -> Iterable[int]:
-        for i in range(__size - 1, -1, -1):
-            yield (__ints >> i) & 1
+    def _iterate_bytes_as_int(__bytes: bytes) -> Iterable[int]:
+        for b in __bytes:
+            for i in range(7, -1, -1):
+                yield (b >> i) & 1
+
+    @staticmethod
+    def iterate_str_as_int(bits: str) -> Iterable[int]:
+        for i in bits:
+            yield int(i)
 
     def __bool__(self) -> bool:
         return self._size > 0
@@ -92,47 +95,49 @@ class BitIntegerBuffer(BitBuffer):
 
 
 class BitStringBuffer(BitBuffer):
-    def __init__(self, data: bytes | str | int = None) -> None:
+    def __init__(self, data: bytes | str = None) -> None:
         self._queue = ""
+        self._index = 0
+        self._size = 0
         if not data:
             return
 
         self.write(data)
 
-    def _convert(self, data: bytes | str | int) -> str:
+    def _convert(self, data: bytes | str) -> str:
         if isinstance(data, str):
-            as_str = data
+            return data
 
         elif isinstance(data, bytes):
-            as_str = "".join(f"{x:08b}" for x in data)
+            return "".join(f"{x:08b}" for x in data)
 
-        elif isinstance(data, int):
-            as_str = "{0:b}".format(data)
+        raise TypeError("invalid type: {0}".format(type(data).__name__))
 
-        else:
-            raise TypeError("invalid type: {0}".format(type(data).__name__))
+    def write(self, data: bytes | str) -> None:
+        data = self._convert(data)
+        self._queue = self._queue[self._index :] + data
 
-        return as_str
+        self._size += len(data) - self._index
+        self._index = 0
 
-    def write(self, data: bytes | str | int) -> None:
-        self._queue += self._convert(data)
-
-    def read(self, n: int = None) -> str | None:
+    def read(self, n: int = None) -> str:
         if self._queue:
             if n is None:
-                retval = self._queue
+                retval = self._queue[self._index :]
                 self._queue = ""
+                self._index = 0
+                self._size = 0
                 return retval
 
-            retval = self._queue[:n]
-            self._queue = self._queue[n:]
+            old_index = self._index
+            self._index += n
 
-            return retval
+            return self._queue[old_index : self._index]
 
         return None
 
     def __bool__(self) -> bool:
-        return not not self._queue
+        return self._index < self._size
 
     def __len__(self) -> int:
-        return len(self._queue)
+        return self._size - self._index

@@ -12,9 +12,9 @@ def dump(input_file: TextIO | str, output_file: BinaryIO) -> None:
     Args:
         input_file (TextIO | str): a file containing text or just some strings
         output_file (BinaryIO): a file that can be written with bytes
-    """    
-    bit_output = BufferedStringOutput(output_file)
+    """
     encoder = AdaptiveEncoder()
+    bit_output = BufferedStringOutput(output_file)
 
     for symbol in input_file.read():
         bit_output.write(encoder.encode(symbol))
@@ -36,13 +36,13 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
 
     Returns:
         None | str: if output file is not provided, strings will be returned instead
-    """    
+    """
     decoder = AdaptiveDecoder()
     bit_input = BufferedStringInput(input_file)
 
     if output_file:
         while True:
-            encoded_bits = bit_input.read(8)
+            encoded_bits = bit_input.read(32)
             if not encoded_bits:
                 output_file.write(decoder.flush())
                 return
@@ -51,7 +51,7 @@ def load(input_file: BinaryIO, output_file: TextIO = None) -> None | str:
     decoded_data = ""
 
     while True:
-        encoded_bits = bit_input.read(8)
+        encoded_bits = bit_input.read(32)
         if not encoded_bits:
             decoded_data += decoder.flush()
             if not decoded_data:

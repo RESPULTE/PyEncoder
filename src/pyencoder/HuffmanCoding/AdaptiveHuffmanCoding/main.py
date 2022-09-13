@@ -2,7 +2,6 @@ from typing import Generator
 
 from pyencoder import Settings
 from pyencoder.utils.bitbuffer import BitStringBuffer
-from pyencoder.utils.misc import check_is_symbol
 
 from pyencoder.HuffmanCoding.AdaptiveHuffmanCoding.codebook import AdaptiveHuffmanTree, get_huffman_code
 
@@ -15,7 +14,8 @@ class AdaptiveEncoder(AdaptiveHuffmanTree):
         self._encoder.send(None)
 
     def encode(self, symbol: str) -> str:
-        check_is_symbol(symbol)
+        if symbol not in Settings.SYMBOLS:
+            raise ValueError(f"Unknown Symbol Found: {symbol}")
 
         return self._encoder.send(symbol)
 

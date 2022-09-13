@@ -1,6 +1,3 @@
-import cProfile
-
-
 def main():
     import os
     import time

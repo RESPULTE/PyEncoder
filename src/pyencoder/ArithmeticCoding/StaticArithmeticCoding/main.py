@@ -1,7 +1,8 @@
-from typing import Dict, Iterable, Literal, Tuple
+from typing import Tuple
 
 from pyencoder import Settings
 from pyencoder.ArithmeticCoding.StaticArithmeticCoding.codebook import StaticArithmeticCodebook
+from pyencoder.utils.bitbuffer import BitIntegerBuffer
 
 _SAC = Settings.ArithmeticCoding
 
@@ -76,32 +77,11 @@ def decode(codebook: StaticArithmeticCodebook, encoded_data: str) -> str:
         str: the original dataset (hopefully)
     """
 
-    def iter_bit(__str: str) -> Iterable[Literal[0, 1]]:
-        """
-        a helper function to return the encoded data bit by bit as integers
-
-        Args:
-            __str (str): bitcode, string containing 0s and 1s
-
-        Yields:
-            Iterator[Literal[0, 1]]: ...
-        """
-        i = 0
-
-        try:
-            while True:
-                yield int(__str[i])
-                i += 1
-
-        except IndexError:
-            while True:
-                yield 0
-
     lower_limit = 0
     upper_limit = _SAC.FULL_RANGE_BITMASK
 
     code_values = int(encoded_data[: _SAC.PRECISION], 2)
-    bitstream = iter_bit(encoded_data[_SAC.PRECISION :])
+    bitstream = BitIntegerBuffer(encoded_data[_SAC.PRECISION :])
 
     decoded_data = ""
     total_elems = codebook.total_elems
@@ -145,6 +125,6 @@ def decode(codebook: StaticArithmeticCodebook, encoded_data: str) -> str:
             lower_limit = lower_limit << 1
             upper_limit = (upper_limit << 1) + 1
 
-            code_values = (code_values << 1) + next(bitstream)
+            code_values = (code_values << 1) + (bitstream.read(1) or 0)
 
     return decoded_data

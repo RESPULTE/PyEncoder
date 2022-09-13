@@ -1,8 +1,8 @@
 from typing import Generator
 
 from pyencoder import Settings
+from pyencoder.error import UnknownSymbolError
 from pyencoder.utils.bitbuffer import BitIntegerBuffer
-
 from pyencoder.ArithmeticCoding.AdaptiveArithmeticCoding.codebook import AdaptiveArithmeticCodebook
 
 _SAC = Settings.ArithmeticCoding
@@ -42,7 +42,7 @@ class AdaptiveEncoder:
             str: the bitcode//encoded data
         """
         if symbol not in Settings.SYMBOLS:
-            raise ValueError(f"unknown symbol detected: {symbol}")
+            raise UnknownSymbolError(symbol)
         return self.encoder.send(symbol)
 
     def _encode(self) -> Generator[str, str, None]:
@@ -150,14 +150,15 @@ class AdaptiveDecoder:
             str: deocded symbol(s) if any, if not, it'll be an empty string
         """
         if not self._primed:
+
+            self.bitstream.write(bits)
             if len(self.bitstream) < _SAC.PRECISION:
-                self.bitstream.write(bits)
                 return ""
 
             self.code_values = self.bitstream.read(_SAC.PRECISION)
-
-            self._primed = True
             self.decoder.send(None)
+            self._primed = True
+            bits = ""
 
         return self.decoder.send(bits)
 
@@ -236,8 +237,10 @@ class AdaptiveDecoder:
             str: deocded symbol(s) if any, if not, it'll be an empty string
         """
         self._flushed = True
-        retval = self.decoder.send(None)
+        data = None if self._primed else "0" * (_SAC.PRECISION - len(self.bitstream))
+        retval = self.decode(data)
         self.reset()
+
         return retval
 
     def reset(self) -> None:

@@ -3,6 +3,7 @@ import itertools
 from typing import OrderedDict, Tuple
 
 from pyencoder import Settings
+from pyencoder.error import UnknownSymbolError
 
 
 class AdaptiveArithmeticCodebook:
@@ -56,7 +57,7 @@ class AdaptiveArithmeticCodebook:
             symbol (str): the symbol
 
         Raises:
-            ValueError: if an unknown symbol, that's not catalogued in the central "Settings" object is detected
+            UnknownSymbolError: if an unknown symbol, that's not catalogued in the central "Settings" object is detected
 
         Returns:
             Tuple[int, int]: the probability range for said symbol (upper/lower)
@@ -66,7 +67,7 @@ class AdaptiveArithmeticCodebook:
         try:
             index = Settings.SYMBOLS.index(symbol)
         except ValueError as err:
-            raise ValueError("unknown symbol detected: {0}".format(symbol)) from err
+            raise UnknownSymbolError(symbol) from err
         probability = (sym_probs[index], sym_probs[index + 1])
 
         self._update(symbol, index)
