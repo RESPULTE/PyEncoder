@@ -156,7 +156,10 @@ class AdaptiveDecoder:
                 return ""
 
             self.code_values = self.bitstream.read(_SAC.PRECISION)
-            self.decoder.send(None)
+            EOF_on_input = self.decoder.send(None)
+            if EOF_on_input:
+                return next(self.decoder)
+
             self._primed = True
             bits = ""
 
@@ -188,7 +191,11 @@ class AdaptiveDecoder:
             sym, (sym_low, sym_high) = self.codebook.probability_symbol_search(scaled_code_value)
 
             if sym == Settings.EOF_MARKER:
+                if not self._primed:
+                    yield True
+
                 yield decoded_symbols
+                return
 
             decoded_symbols += sym
             self.upper_limit = self.lower_limit + (sym_high * current_range // total_symbols) - 1

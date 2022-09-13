@@ -65,6 +65,8 @@ class AdaptiveDecoder(AdaptiveHuffmanTree):
 
             code = self.bitstream.read(Settings.FIXED_CODE_SIZE)
             symbol = Settings.FIXED_SYMBOL_LOOKUP[code]
+            if symbol == Settings.EOF_MARKER:
+                return ""
 
             self._update(symbol)
             self._primed = True
@@ -114,10 +116,7 @@ class AdaptiveDecoder(AdaptiveHuffmanTree):
                     current_node = self.root
                     self._update(new_symbol)
 
-    def _update(self, symbol: str) -> Generator[str, str | int | bytes, None]:
-        if symbol is Settings.EOF_MARKER:
-            return
-
+    def _update(self, symbol: str) -> None:
         if symbol in self.symbol_catalogue:
             node = self.symbol_catalogue[symbol]
 
@@ -129,7 +128,6 @@ class AdaptiveDecoder(AdaptiveHuffmanTree):
         self._update_node_relation(node)
 
     def flush(self) -> str:
-        self._decoder.close()
         self.reset()
         return ""
 
